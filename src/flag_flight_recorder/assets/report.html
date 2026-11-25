@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Compare original, live, and offline executions of a flag-dependent incident.">
+  <link rel="icon" href="data:,">
+  <title>Evidence · Flag Flight Recorder</title>
+  <style>/* REPORT_STYLE */</style>
+</head>
+<body>
+  <a class="skip" href="#report">Skip to incident evidence</a>
+  <header class="masthead">
+    <div class="frame masthead-inner">
+      <div class="brand"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>Flag Flight Recorder</span>
+      </div>
+      <div class="header-actions">
+        <span id="engine" class="engine"></span>
+        <button id="download" class="export" type="button">Download evidence <span aria-hidden="true">↓</span></button>
+      </div>
+    </div>
+  </header>
+  <div class="frame workspace">
+    <aside class="sidebar">
+      <h2 class="section-label">Incidents</h2>
+      <nav id="cases" class="case-nav" aria-label="Captured incidents"></nav>
+      <div class="run-meta" id="run-meta"></div>
+    </aside>
+    <main id="report">
+      <section class="case-header" aria-labelledby="title">
+        <div class="case-meta">
+          <span class="capture-label" id="capture-label"></span>
+          <span class="state-line" id="case-state"></span>
+        </div>
+        <h1 id="title"></h1>
+        <p class="description" id="description"></p>
+        <dl class="context" id="context"></dl>
+      </section>
+      <nav class="tabs" role="tablist" aria-label="Evidence views">
+        <button id="tab-overview" data-view="overview" role="tab" aria-controls="view" type="button">Overview</button>
+        <button id="tab-regression" data-view="regression" role="tab" aria-controls="view" type="button">Regression test</button>
+        <button id="tab-capture" data-view="capture" role="tab" aria-controls="view" type="button">Capture details</button>
+      </nav>
+      <section id="view" class="view" role="tabpanel" aria-labelledby="tab-overview" tabindex="0"></section>
+      <noscript><p>Enable JavaScript to inspect this evidence report.</p></noscript>
+    </main>
+  </div>
+  <script id="evidence" type="application/json"><!-- REPORT_DATA --></script>
+  <script>/* REPORT_SCRIPT */</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+.local/
+.venv/
+proof/.local/
+proof/.venv/
+dist/

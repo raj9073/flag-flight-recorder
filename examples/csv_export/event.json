@@ -1,0 +1,10 @@
+{
+  "identity": "synthetic-pilot-00",
+  "traits": {"plan": "pilot"},
+  "inputs": {
+    "rows": [
+      {"order_id": "ORD-1001", "customer": "Demo East", "total_inr": "1250.00"},
+      {"order_id": "ORD-1002", "customer": "Demo West", "total_inr": "2475.50"}
+    ]
+  }
+}

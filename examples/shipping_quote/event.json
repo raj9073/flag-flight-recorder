@@ -1,0 +1,11 @@
+{
+  "identity": "synthetic-mountain-01",
+  "traits": {"zone": "mountain"},
+  "inputs": {"destination": "Ridge Valley", "service": "express"},
+  "fixtures": {
+    "rates": {
+      "default": {"Ridge Valley": {"standard": 900, "express": 1800}},
+      "regional": {"Ridge Valley": {"standard": 1400}}
+    }
+  }
+}

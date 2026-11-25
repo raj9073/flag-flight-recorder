@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling==1.28.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flag-flight-recorder"
+version = "0.1.0"
+description = "Capture, replay, and test flag-dependent Python operations with self-hosted Flagsmith."
+readme = "README.md"
+requires-python = ">=3.11,<3.15"
+dependencies = ["flagsmith==6.5.0", "flagsmith-flag-engine==11.1.2"]
+
+[project.scripts]
+flight-recorder = "flag_flight_recorder.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.4,<10", "ruff>=0.13,<1", "mypy>=1.18,<2"]
+browser = ["playwright>=1.55,<2"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flag_flight_recorder", "examples"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/examples", "/tests", "/docs", "/compose.yaml", "/README.md", "/pyproject.toml", "/uv.lock"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src", "examples"]
+
+[[tool.mypy.overrides]]
+module = ["flagsmith.*", "flagsmith", "flag_engine.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+markers = ["live: requires an isolated, self-hosted Flagsmith demo instance"]

@@ -1,0 +1,50 @@
+x-flagsmith: &flagsmith
+  image: docker.flagsmith.com/flagsmith/flagsmith:2.295.2
+  environment:
+    DATABASE_URL: postgresql://flagsmith:${FFR_COMPOSE_DB_PASSWORD:?Run examples.stack start}@postgres:5432/flagsmith
+    DJANGO_SECRET_KEY: ${FFR_COMPOSE_DJANGO_SECRET:?Run examples.stack start}
+    DJANGO_ALLOWED_HOSTS: 127.0.0.1,localhost
+    FLAGSMITH_DOMAIN: 127.0.0.1:${FFR_COMPOSE_PORT:?Run examples.stack start}
+    ENABLE_TELEMETRY: "false"
+    EXPERIMENTATION_ENABLED: "false"
+    ENVIRONMENT: production
+    GUNICORN_THREADS: "2"
+    GUNICORN_WORKERS: "1"
+    TASK_RUN_METHOD: SYNCHRONOUSLY
+    USE_POSTGRES_FOR_ANALYTICS: "true"
+
+services:
+  postgres:
+    image: docker.io/library/postgres:16.15-alpine
+    environment:
+      POSTGRES_USER: flagsmith
+      POSTGRES_DB: flagsmith
+      POSTGRES_PASSWORD: ${FFR_COMPOSE_DB_PASSWORD:?Run examples.stack start}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -h 127.0.0.1 -U flagsmith -d flagsmith"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  migrate-db:
+    <<: *flagsmith
+    command: [migrate]
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  flagsmith:
+    <<: *flagsmith
+    command: [serve]
+    ports:
+      - "127.0.0.1:${FFR_COMPOSE_PORT}:8000"
+    depends_on:
+      migrate-db:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:

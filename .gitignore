@@ -1,0 +1,14 @@
+/.local/
+/.venv/
+/.pytest_cache/
+/.mypy_cache/
+/.ruff_cache/
+/dist/
+/build/
+/graphify-out/
+/memory/
+/proof/
+/PROJECT_PLAN.md
+/.coverage
+**/__pycache__/
+*.py[cod]
