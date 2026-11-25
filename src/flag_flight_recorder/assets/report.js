@@ -3,6 +3,7 @@ const evidence = JSON.parse(document.getElementById("evidence").textContent);
 const byId = (id) => document.getElementById(id);
 const element = (tag, text) => {
   const node = document.createElement(tag);
+  if (tag === "pre") node.tabIndex = 0;
   if (text !== undefined && text !== null) node.textContent = text;
   return node;
 };
@@ -201,12 +202,14 @@ function stageButton(i, mobile) {
   b.type = "button";
   b.className = mobile ? "m-stage" : "stage";
   b.dataset.stage = i;
-  b.setAttribute("aria-label", s.title + " · " + s.status);
   if (mobile) {
     const label = element("span", s.status);
     label.className = statusClass(s);
-    b.append(element("strong", s.title), label);
-  } else b.textContent = s.title;
+    b.append(element("strong", s.title), document.createTextNode(" "), label);
+  } else {
+    b.textContent = s.title;
+    b.setAttribute("aria-label", s.title + " · " + s.status);
+  }
   b.addEventListener("click", () => selectStage(i, true));
   b.addEventListener("keydown", (e) => {
     const n = stages.length,

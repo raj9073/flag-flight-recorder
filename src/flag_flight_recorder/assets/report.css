@@ -44,6 +44,7 @@ summary {
 button:focus-visible,
 summary:focus-visible,
 select:focus-visible,
+pre:focus-visible,
 a:focus-visible {
   outline: 3px solid #ec7e33;
   outline-offset: 3px;

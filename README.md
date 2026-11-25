@@ -2,7 +2,7 @@
 
 A customer’s CSV export failed. By the time a developer investigated, someone had changed a feature flag and the same request worked again. Flag Flight Recorder captures the original Flagsmith rules with the request, reproduces the failure offline, and turns it into a pytest that can verify the fix.
 
-**[Open the interactive incident](https://raj9073.github.io/flag-flight-recorder/)** · [Download the offline viewer](https://github.com/raj9073/flag-flight-recorder/releases/download/v0.2.0/flag-flight-recorder-evidence.html) · [Release and Python package](https://github.com/raj9073/flag-flight-recorder/releases/tag/v0.2.0) · [Automated checks](https://github.com/raj9073/flag-flight-recorder/actions/workflows/verify.yml)
+**[Open the interactive incident](https://raj9073.github.io/flag-flight-recorder/)** · [Download the offline viewer](https://github.com/raj9073/flag-flight-recorder/releases/download/v0.2.1/flag-flight-recorder-evidence.html) · [Release and Python package](https://github.com/raj9073/flag-flight-recorder/releases/tag/v0.2.1) · [Automated checks](https://github.com/raj9073/flag-flight-recorder/actions/workflows/verify.yml)
 
 [![Execution trace of a pilot export, showing streaming on, off, and restored, with a failing capture and a passing code fix](docs/preview.png)](https://raj9073.github.io/flag-flight-recorder/)
 
@@ -40,7 +40,7 @@ This example works in an empty directory. It installs the release, copies a smal
 ```sh
 uv venv --python 3.13
 . .venv/bin/activate
-uv pip install pytest https://github.com/raj9073/flag-flight-recorder/releases/download/v0.2.0/flag_flight_recorder-0.2.0-py3-none-any.whl
+uv pip install pytest https://github.com/raj9073/flag-flight-recorder/releases/download/v0.2.1/flag_flight_recorder-0.2.1-py3-none-any.whl
 python -c 'from pathlib import Path; import shutil, examples.starter; shutil.copytree(Path(examples.starter.__file__).parent, "myapp", ignore=shutil.ignore_patterns("__pycache__"))'
 capture_id=$(python -m myapp.run)
 flight-recorder list --operation render-label

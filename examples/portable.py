@@ -6,6 +6,7 @@ import base64
 import difflib
 import io
 import zipfile
+from importlib.metadata import version
 from pathlib import Path
 
 from flag_flight_recorder import Recorder, Store
@@ -38,15 +39,17 @@ def sample_artifacts(
     green = run_regression(bundle, "fixed")
     if red["passed"] or not green["passed"] or red["spec_sha256"] != green["spec_sha256"]:
         raise FlightError("The separate portable fixture did not pass fix verification.")
+    release = version("flag-flight-recorder")
+    wheel = f"flag_flight_recorder-{release}-py3-none-any.whl"
     instructions = (
-        f"Flag Flight Recorder 0.2.0 · {original.operation}\n\n"
+        f"Flag Flight Recorder {release} · {original.operation}\n\n"
         "This synthetic fixture contains the effective flag values for this example. "
         "Its capture and snapshot digests belong to the fixture.\n\n"
         "From the directory containing test_incident.py, use uv on Linux with "
         "user and network namespaces:\n\n"
         f"uv venv --python {runtime()['python']} .venv\n"
         ". .venv/bin/activate\n"
-        "uv pip install pytest https://github.com/raj9073/flag-flight-recorder/releases/download/v0.2.0/flag_flight_recorder-0.2.0-py3-none-any.whl\n"
+        f"uv pip install pytest https://github.com/raj9073/flag-flight-recorder/releases/download/v{release}/{wheel}\n"
         "FLIGHT_RECORDER_APP_VERSION=buggy python -m pytest -q test_incident.py\n"
         "FLIGHT_RECORDER_APP_VERSION=fixed python -m pytest -q test_incident.py\n"
     )

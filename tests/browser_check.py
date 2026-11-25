@@ -97,6 +97,10 @@ def check(browser: Browser, url: str, output: Path, report: Path | None) -> None
                 if case == cases[0]:
                     page.locator("#explorer").screenshot(path=output / "matrix.png")
         page.locator("#regression summary").click()
+        patch = page.locator("#regression-body pre").last
+        patch.focus()
+        expect(patch).to_be_focused()
+        expect(patch).to_have_attribute("tabindex", "0")
         archive = download(
             page, page.get_by_role("button", name="Download runnable synthetic pytest")
         )
@@ -134,6 +138,8 @@ def check(browser: Browser, url: str, output: Path, report: Path | None) -> None
         expect(screen.locator("#case")).to_have_value("shipping-quote")
         assert screen.url.endswith("#shipping-quote/regression")
         screen.locator("#case").select_option("csv-export")
+        if width <= 390:
+            expect(screen.locator(".m-stage").first).to_have_accessible_name("Capture App failed")
         stage = screen.locator("button[data-stage='3']:visible")
         stage.click()
         expect(screen.locator("#output-title")).to_have_text("Test passed")
