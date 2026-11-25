@@ -120,7 +120,8 @@ def evaluate(operation: Operation, snapshot: Snapshot, event: Event) -> Executio
 
 
 class Recorder:
-    def __init__(self, store: Store, registry: Registry):
+    def __init__(self, store: Store, registry: Registry, *, errors_only: bool = False):
+        self.errors_only = errors_only
         self.store = store
         self.registry = registry
         self.snapshots = SnapshotProvider(store)
@@ -160,6 +161,8 @@ class Recorder:
         on_capture: Callable[[Capture], None] | None = None,
     ) -> JSON:
         capture, execution = self._record(name, event, version)
+        if self.errors_only and execution.exception is None:
+            return execution.outcome["result"]
         try:
             self.store.save_capture(capture)
         except FlightError as error:

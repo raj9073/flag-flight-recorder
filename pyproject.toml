@@ -4,9 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flag-flight-recorder"
-version = "0.1.0"
+version = "0.2.0"
 description = "Capture, replay, and test flag-dependent Python operations with self-hosted Flagsmith."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11,<3.15"
 dependencies = ["flagsmith==6.5.0", "flagsmith-flag-engine==11.1.2"]
 
@@ -21,7 +23,7 @@ browser = ["playwright>=1.55,<2"]
 packages = ["src/flag_flight_recorder", "examples"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/src", "/examples", "/tests", "/docs", "/compose.yaml", "/README.md", "/pyproject.toml", "/uv.lock"]
+include = ["/src", "/examples", "/tests", "/docs", "/compose.yaml", "/README.md", "/LICENSE", "/pyproject.toml", "/uv.lock"]
 
 [tool.ruff]
 line-length = 100

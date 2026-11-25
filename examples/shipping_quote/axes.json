@@ -1,0 +1,4 @@
+[
+  {"flag": "use_regional_rates", "field": "enabled", "values": [false, true]},
+  {"flag": "enable_express_quotes", "field": "enabled", "values": [false, true]}
+]

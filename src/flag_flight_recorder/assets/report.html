@@ -1,52 +1,134 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Compare original, live, and offline executions of a flag-dependent incident.">
-  <link rel="icon" href="data:,">
-  <title>Evidence · Flag Flight Recorder</title>
-  <style>/* REPORT_STYLE */</style>
-</head>
-<body>
-  <a class="skip" href="#report">Skip to incident evidence</a>
-  <header class="masthead">
-    <div class="frame masthead-inner">
-      <div class="brand"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span>Flag Flight Recorder</span>
-      </div>
-      <div class="header-actions">
-        <span id="engine" class="engine"></span>
-        <button id="download" class="export" type="button">Download evidence <span aria-hidden="true">↓</span></button>
-      </div>
-    </div>
-  </header>
-  <div class="frame workspace">
-    <aside class="sidebar">
-      <h2 class="section-label">Incidents</h2>
-      <nav id="cases" class="case-nav" aria-label="Captured incidents"></nav>
-      <div class="run-meta" id="run-meta"></div>
-    </aside>
-    <main id="report">
-      <section class="case-header" aria-labelledby="title">
-        <div class="case-meta">
-          <span class="capture-label" id="capture-label"></span>
-          <span class="state-line" id="case-state"></span>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <meta
+      name="description"
+      content="Inspect the captured flags, application output and replay evidence for a Flagsmith incident."
+    />
+    <title>Incident trace · Flag Flight Recorder</title>
+    <style>
+      /* REPORT_STYLE */
+    </style>
+  </head>
+  <body>
+    <a class="skip" href="#investigation">Skip to incident</a>
+    <header class="bar">
+      <div class="shell">
+        <div class="brand">
+          <span aria-hidden="true" class="rec-mark"
+            ><i></i><i></i><i></i><i></i></span
+          >Flag Flight Recorder
         </div>
-        <h1 id="title"></h1>
-        <p class="description" id="description"></p>
-        <dl class="context" id="context"></dl>
-      </section>
-      <nav class="tabs" role="tablist" aria-label="Evidence views">
-        <button id="tab-overview" data-view="overview" role="tab" aria-controls="view" type="button">Overview</button>
-        <button id="tab-regression" data-view="regression" role="tab" aria-controls="view" type="button">Regression test</button>
-        <button id="tab-capture" data-view="capture" role="tab" aria-controls="view" type="button">Capture details</button>
+        <button type="button" class="save" id="save">
+          <span aria-hidden="true">↓</span> Evidence JSON
+        </button>
+      </div>
+    </header>
+    <main class="shell" id="investigation" tabindex="-1">
+      <nav class="case-nav" aria-label="Incident selection">
+        <label for="case">Incident</label
+        ><select id="case"></select
+        ><button type="button" class="jump" id="jump" hidden>
+          Try flag combinations ↓</button
+        ><span class="case-id" id="case-id"></span>
       </nav>
-      <section id="view" class="view" role="tabpanel" aria-labelledby="tab-overview" tabindex="0"></section>
-      <noscript><p>Enable JavaScript to inspect this evidence report.</p></noscript>
+      <h1 id="headline"></h1>
+      <p class="dek" id="dek"></p>
+      <section class="trace" aria-labelledby="trace-title">
+        <div class="trace-head">
+          <h2 id="trace-title">Execution trace</h2>
+          <p>Same identity and input</p>
+        </div>
+        <table
+          class="matrix"
+          id="matrix"
+          aria-label="Recorded flags, code and outcomes by stage"
+        ></table>
+        <div class="mobile-trace">
+          <div
+            class="m-stages"
+            id="m-stages"
+            role="group"
+            aria-label="Inspect a recorded stage"
+          ></div>
+          <p class="delta" id="delta"></p>
+        </div>
+      </section>
+      <section
+        class="readout"
+        aria-label="Selected stage evidence"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <div class="output">
+          <p class="micro" id="stage-kind"></p>
+          <h3 id="output-title"></h3>
+          <pre id="output"></pre>
+          <p id="explain" class="explain"></p>
+        </div>
+        <div class="proof">
+          <h3 id="proof-title"></h3>
+          <dl class="signal" id="proof"></dl>
+        </div>
+      </section>
+      <section
+        id="explorer"
+        class="explorer"
+        aria-labelledby="explorer-title"
+        hidden
+        tabindex="-1"
+      >
+        <div class="explorer-head">
+          <div>
+            <p class="micro">Controlled offline runs</p>
+            <h2 id="explorer-title">Try flag combinations</h2>
+          </div>
+          <p>
+            Choose a cell to inspect both applications with the same input. Only
+            the two effective flag settings vary.
+          </p>
+        </div>
+        <div class="experiment">
+          <div id="grid"></div>
+          <div class="cell-evidence" aria-live="polite">
+            <h3 id="cell-title"></h3>
+            <div id="cell-output"></div>
+          </div>
+        </div>
+      </section>
+      <details id="regression">
+        <summary>Inspect the regression test and code change</summary>
+        <div id="regression-body"></div>
+      </details>
+      <details id="provenance">
+        <summary>Inspect source fingerprints and SDK checks</summary>
+        <dl class="signal" id="origins"></dl>
+      </details>
+      <section id="replay-command" hidden>
+        <h2>Replay this capture</h2>
+        <p>
+          Set FLIGHT_RECORDER_STORE to this run’s store directory, then run the
+          command from the application checkout.
+        </p>
+        <div class="command">
+          <code id="command"></code
+          ><button type="button" id="copy">Copy command</button>
+        </div>
+      </section>
+      <footer>
+        <span id="meta"></span
+        ><button type="button" id="summary">Download anonymous summary</button>
+      </footer>
+      <noscript>Enable JavaScript to inspect the recorded evidence.</noscript>
     </main>
-  </div>
-  <script id="evidence" type="application/json"><!-- REPORT_DATA --></script>
-  <script>/* REPORT_SCRIPT */</script>
-</body>
+    <script type="application/json" id="evidence">
+      <!-- REPORT_DATA -->
+    </script>
+    <script>
+      /* REPORT_SCRIPT */
+    </script>
+  </body>
 </html>

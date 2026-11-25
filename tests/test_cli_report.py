@@ -113,7 +113,7 @@ def test_command_line_capture_replay_compare_export_and_report(
         == 0
     )
     assert json.loads(capsys.readouterr().out)["report"] == str(report)
-    assert "Execution comparison" in report.read_text()
+    assert "Execution trace" in report.read_text()
     assert main(["report", str(comparison), "--before", str(prior), "--output", str(report)]) == 2
     assert "Provide both" in capsys.readouterr().err
     assert main([*base, "replay", "../wrong", *registry]) == 2

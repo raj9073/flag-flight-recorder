@@ -1,0 +1,78 @@
+name: Verify recorder
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python ${{ matrix.python }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          version: "0.12.15"
+          enable-cache: false
+      - name: Install locked dependencies
+        run: uv sync --locked --python "$(command -v python)"
+      - name: Check replay prerequisites and run tests
+        run: |
+          .venv/bin/flight-recorder doctor
+          .venv/bin/python -m pytest -q
+      - name: Check source, build and install into a separate project
+        if: matrix.python == '3.13'
+        run: |
+          .venv/bin/ruff check src examples tests
+          .venv/bin/ruff format --check src examples tests
+          .venv/bin/mypy
+          node --check src/flag_flight_recorder/assets/report.js
+          uv build --no-sources
+          .venv/bin/python tests/installed_check.py dist/*.whl
+
+  live:
+    name: Self-hosted Flagsmith and browser
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      FFR_CONTAINER_ENGINE: docker
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          version: "0.12.15"
+          enable-cache: false
+      - name: Install the application and browser
+        run: |
+          uv sync --locked --group browser --python "$(command -v python)"
+          .venv/bin/playwright install --with-deps chromium
+      - name: Capture real HTTP requests and verify both fixes
+        run: |
+          .venv/bin/flight-recorder doctor --live
+          .venv/bin/python -m examples.stack start
+          .venv/bin/python -m examples.demo
+      - name: Exercise the viewer and its downloadable tests
+        run: |
+          .venv/bin/flight-recorder serve .local/demo/evidence.html &
+          viewer_pid=$!
+          trap 'kill "$viewer_pid" 2>/dev/null || true' EXIT
+          curl --retry 8 --retry-connrefused --retry-delay 1 -fsS http://127.0.0.1:13811/ -o /dev/null
+          .venv/bin/python tests/browser_check.py --channel chromium --report .local/demo/evidence.html
+          uv build --no-sources
+          .venv/bin/python tests/installed_check.py dist/*.whl --archives .local/verification/ui

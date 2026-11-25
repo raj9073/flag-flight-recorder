@@ -43,26 +43,34 @@ def load_registry(spec: str) -> Registry:
 
 
 def verify_runtime(capture: Capture) -> None:
-    if runtime() != capture.evaluator:
+    observed = runtime()
+    if observed != capture.evaluator:
         raise FlightError(
-            "Flagsmith evaluator fingerprint mismatch. Use the captured Python and SDK versions."
+            f"Flagsmith evaluator fingerprint mismatch. Captured {capture.evaluator!r}, observed {observed!r}."
         )
 
 
 def historical(registry: Registry, capture: Capture, snapshot: Snapshot) -> Execution:
     verify_runtime(capture)
     if snapshot.digest != capture.snapshot_sha256:
-        raise FlightError("Historical environment digest mismatch.")
-    operation = registry.get(capture.operation, capture.app_version)
-    if operation.fingerprint() != capture.app_sha256:
         raise FlightError(
-            "Application code fingerprint mismatch. Use the captured handler version."
+            f"Historical environment digest mismatch. Captured {capture.snapshot_sha256}, observed {snapshot.digest}."
+        )
+    operation = registry.get(capture.operation, capture.app_version)
+    fingerprint = operation.fingerprint()
+    if fingerprint != capture.app_sha256:
+        raise FlightError(
+            f"Application code fingerprint mismatch. Captured {capture.app_sha256}, observed {fingerprint}."
         )
     result = evaluate(operation, snapshot, capture.event)
     if canonical(result.reads) != canonical(capture.reads):
-        raise FlightError("Replay diverged from the captured flag reads.")
+        raise FlightError(
+            f"Replay diverged from the captured flag reads. Changes: {flag_diff(capture.reads, result.reads)!r}"
+        )
     if canonical(result.outcome) != canonical(capture.outcome):
-        raise FlightError("Replay diverged from the captured application outcome.")
+        raise FlightError(
+            f"Replay diverged from the captured application outcome. Captured {str(capture.outcome)[:360]}, observed {str(result.outcome)[:360]}."
+        )
     return result
 
 
@@ -192,6 +200,12 @@ def _dispatch(request: Object) -> Object:
     replayed = historical(registry, capture, original)
     report: Object = {
         "status": "reproduced",
+        "occurred_at": capture.occurred_at,
+        "runtime": capture.evaluator,
+        "registry": string_value(request.get("registry"), "Registry"),
+        "reasons": original.flags(capture.event.identity, capture.event.traits).reasons(
+            capture.reads
+        ),
         "capture_id": capture.id,
         "operation": capture.operation,
         "app_version": capture.app_version,
@@ -207,6 +221,17 @@ def _dispatch(request: Object) -> Object:
         "historical": execution_document(original, replayed),
         "isolation": isolation,
     }
+    if mode == "explore":
+        from .exploration import explore
+
+        return explore(
+            registry,
+            capture,
+            original,
+            request["axes"],
+            string_value(request.get("candidate"), "Candidate version"),
+            isolation,
+        )
     if mode == "replay":
         return report
     if mode != "compare":

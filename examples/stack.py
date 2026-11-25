@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import os
 import secrets
-import shutil
 import subprocess
 import sys
 import time
@@ -14,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from flag_flight_recorder import FlightError
+from flag_flight_recorder.diagnostics import compose_engine
 from flag_flight_recorder.store import read_file, write_private
 
 
@@ -42,7 +42,7 @@ class Stack:
         return self.state / "compose.env"
 
     def compose(self, *args: str) -> None:
-        engine = shutil.which("podman") or shutil.which("docker")
+        engine = compose_engine()
         if not engine:
             raise FlightError("Install Podman or Docker with a Compose provider.")
         if not Path("compose.yaml").is_file():

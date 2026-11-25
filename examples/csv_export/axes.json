@@ -1,0 +1,4 @@
+[
+  {"flag": "stream_report_rows", "field": "enabled", "values": [false, true]},
+  {"flag": "export_column_profile", "field": "value", "values": ["summary", "detailed"]}
+]

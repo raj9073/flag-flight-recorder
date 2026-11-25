@@ -1,34 +1,40 @@
 # How Flag Flight Recorder works
 
-## Request lifetime
+## What belongs to one request
 
-1. A snapshot refresh fetches an environment document from self-hosted Flagsmith and validates it with the official Python SDK.
-2. The recorder stores the exact bytes under their SHA-256 digest and publishes one immutable snapshot reference. Refreshes are serialized. An in-progress operation keeps the reference it selected.
-3. The operation receives a flag reader evaluated for the exact captured identity and typed traits. The reader records enabled states and values as the handler uses them.
-4. The recorder executes the registered app handler, captures its result or exception, and writes declared fixtures before publishing the capture record. The application-facing integration preserves the original result or exception if writing the capture fails and reports the storage error separately.
+A snapshot refresh fetches the Flagsmith environment document, validates it with the official SDK and writes the exact bytes under their SHA-256 digest. Refreshes are serialized. An operation retains its selected snapshot even if another request publishes a newer one. The SDK evaluates the captured identity and typed traits against that document. The application-facing flag reader records the enabled states and values the handler actually reads.
 
-The snapshot digest identifies the stored bytes. Compare evaluated flag values when looking at separate exports. Flagsmith-generated metadata can change between exports even when the application sees the same flag values.
+The capture contains the handler version, source fingerprint, runtime fingerprint, request input, declared fixture references, observed flags and result or exception. The store writes fixtures before publishing a capture. `Recorder.run()` preserves the application result or exception when persisting a capture fails. With `errors_only=True`, successful calls skip persistence and the capture callback. `Recorder.record()` also records a successful operation when explicitly requested.
 
-## Execution modes
+## Four questions the tool can answer
 
-| Mode | Code and inputs | Evidence |
+| Question | What is held fixed | What establishes the answer |
 | --- | --- | --- |
-| Historical replay | Exact original snapshot, input, registered app version and compatible runtime | Recomputed flag reads and actual result or exception match the stored capture |
-| Configuration comparison | Exact original app and input, with one historical and one selected current snapshot | Verified historical reproduction, current outcome and a typed difference of the flag reads |
-| Regression verification | Original snapshot and input, with the explicitly selected app version | Observed flags still match the original and the app returns the supplied expected result |
+| Can we reproduce the incident? | Original input, fixtures, identity, traits, snapshot, code and evaluator | A fresh SDK evaluation and application invocation match both the recorded flag reads and outcome. |
+| What happened after the rule edit? | Same registered application and request | The comparison executes the updated document offline. In the demo, a second real HTTP request separately produces a wire response, a distinct capture ID and matching reads. |
+| Does the fix satisfy the expected behavior? | Original request, snapshot, expected output and exported pytest specification | Each run identifies its actual code and specification. The before run must match the captured code and outcome. A fix is shown only when a different code fingerprint turns the same failing expectation green. |
+| Which of these flag combinations reproduces the failure? | All other effective flags, input, fixtures and identity | The explorer creates four synthetic documents from two declared axes and executes both original and candidate versions. Selecting a cell shows the two returned values or exceptions and the flags actually read. |
 
-Replay and regression run in a child process in a Linux network namespace. The worker checks that its namespace differs from the controller's and that loopback is its only interface. The demo also probes the live Flagsmith listener from the worker and confirms that the same listener is available from the host.
+For the explorer, each axis names a flag, a field (`enabled` or `value`) and two distinct choices. Both axes must include the original effective settings. The worker first checks those effective settings reproduce the recorded baseline. The four cells are hypothetical interventions on the resolved values for this identity. Their results establish behavior for these particular inputs. Use ordinary historical replay to evaluate the original targeting rules. [CSV axes](../examples/csv_export/axes.json)
 
-The application registry is selected by the caller. A capture identifies a registered operation and version. It does not carry executable application code. The replay compares the recorded source fingerprint and evaluator versions with the current runtime. Fixture hashes validate the files before the operation runs. The exported pytest test pins the generated regression specification and works with a local copy of the original environment document.
+## What gets checked
 
-## Examples
+- The worker runs in a separate Linux network namespace and verifies that only loopback exists. The demo probes the running Flagsmith listener from that worker and checks it remains available from the host.
+- Historical replay requires an exact match on CPython implementation and patch version, Flagsmith SDK version, flag engine version and registered source fingerprint. A mismatch reports captured and observed details. Fixture digests are verified before execution.
+- Full comparisons show the SDK’s recorded-snapshot evaluation reasons when available. The CSV example checks live API and captured-document parity for a default, a segment, an identity override, and a weighted variant. An SDK reason describes the flag evaluation for that identity.
+- Regression verification checks every captured flag read as well as the expected result supplied by the developer. The generated pytest pins the digest of the specification, which pins the capture and expectation. Changing the expected output or mixing two test specifications invalidates a paired report. Archived v0.1 reports label their pair of test identities as unverified.
+- The demo attaches receipts written by the worker inside the actual pytest runs, plus each process exit code. Report validation cross-checks those results, the two HTTP responses and the combination baseline. Digests support consistency checks. They do not authenticate the author of an arbitrary evidence file.
 
-The CSV summary export accepts two synthetic order rows. With streaming enabled, the buggy path sends a customer column that is outside the selected field list. The fixed streaming path projects the selected columns before writing a row. Both versions are runnable, and the historical test asserts the original flag conditions as well as the intended output.
+## What the application supplies
 
-The shipping quote operation receives a JSON rate-table fixture. An express quote in the Mountain Zone reaches a regional table with a standard rate only. The original handler raises a lookup error. The fixed handler returns a structured unavailable result. This example uses the same registration, replay, comparison and export interfaces as the CSV case.
+Register synchronous Python operations with JSON-compatible inputs and outputs. A capture identifies a handler in a registry module installed on the replay machine. The registry factory must be safe to import offline. Refresh a live document during application startup. Register influencing helper files with the optional `sources` argument. Pin additional dependencies in your own lockfile. If time, randomness or an external service affects the handler, pass its observed value as an explicit input or fixture. Replays execute the registered code, so use a trusted registry.
 
-## Evidence and boundaries
+The examples use two order rows for CSV export and a JSON shipping rate table for a quote. CSV streaming with the summary columns exposed an extra customer field. Regional express quoting reached a rate table with only a standard service. Both fixes are exercised under their original feature flags. [CSV handler](../examples/csv_export/fixed.py) · [Shipping handler](../examples/shipping_quote/fixed.py)
 
-The demo changes flags through the management API on its dedicated loopback instance. The recorder itself fetches environment documents and delegates rule evaluation to the SDK. The generated browser report is read-only and self-contained. It shows observed outcomes, exact change results, actual pytest verdicts and isolation evidence. The CLI returns status 0 for successful reproduction or verification, status 1 for a regression assertion failure, and status 2 for capture validation, setup or execution errors.
+## Private evidence and sharing
 
-The supported operation boundary is synchronous Python with JSON-compatible input and declared fixture data. Real capture documents, identities and values can be sensitive. Keep them in the private store. The demo and its public evidence use synthetic data and exclude raw environment documents and account credentials.
+Keep a live capture store, environment documents and generic regression exports private. The full evidence viewer can include identities, traits, returned application data, exception text and flag names. The anonymous summary uses a fixed list of fields: the number of changed flags, whether replay matched, and linked regression verdicts when present. It omits identifiers and application data.
+
+The published example uses synthetic order data. Its downloadable pytest archives contain separate synthetic snapshots with just the effective example flags. Each archive is verified on the original and fixed code before release. Its capture, snapshot and specification have their own digests. The original self-hosted environment stays in the private lab.
+
+The CLI exits 0 for a reproduced incident or passing verification, 1 for a failed regression assertion, and 2 for a setup, validation or execution error. `flight-recorder doctor --live` checks local namespace support, Compose and port availability.

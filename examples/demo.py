@@ -13,9 +13,9 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
-from flag_flight_recorder import Event, FlightError, Recorder, Store
+from flag_flight_recorder import Event, FlightError, Store
 from flag_flight_recorder.model import Object, canonical, object_value, read_json, sha256
-from flag_flight_recorder.regression import export_pytest, load_expected, run_regression
+from flag_flight_recorder.regression import export_pytest, load_expected
 from flag_flight_recorder.replay import isolated
 from flag_flight_recorder.report import render_report
 from flag_flight_recorder.snapshot import RecordingFlags, Snapshot
@@ -23,6 +23,8 @@ from flag_flight_recorder.store import read_file, write_private
 
 from .csv_export.shared import PROFILE, STREAM
 from .flagsmith_lab import CONTROL, MOUNTAIN, PILOT, FlagLab, provision
+from .order_service import make_request, order_service
+from .portable import sample_artifacts
 from .registry import build_registry
 from .shipping_quote.shared import EXPRESS, REGIONAL
 from .stack import Stack, settings
@@ -163,9 +165,11 @@ def csv_inputs(lab: FlagLab) -> tuple[Event, list[Object]]:
 
 
 def pytest_result(test: Path, version: str, probe: str, folder: Path) -> Object:
+    receipt_file = folder / f"verification-{version}.json"
     env = {
         **os.environ,
         "FLIGHT_RECORDER_APP_VERSION": version,
+        "FLIGHT_RECORDER_RESULT": str(receipt_file.resolve()),
         "FLIGHT_RECORDER_PROBE": probe,
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
     }
@@ -181,7 +185,16 @@ def pytest_result(test: Path, version: str, probe: str, folder: Path) -> Object:
         raise FlightError(f"The exported {version} test timed out.") from error
     log = process.stdout + process.stderr
     write_private(folder / f"pytest-{version}.txt", log)
-    return {"exit_code": process.returncode, "log": log.decode(errors="replace").strip()}
+    receipt = object_value(
+        read_json(read_file(receipt_file, "pytest verification receipt"), "pytest receipt"),
+        "pytest receipt",
+    )
+    require(
+        process.returncode == (0 if receipt["passed"] else 1),
+        f"pytest and its worker receipt disagree. See {folder}.",
+    )
+    receipt["pytest_exit"] = process.returncode
+    return receipt
 
 
 def run_case(
@@ -191,11 +204,12 @@ def run_case(
     event: Event,
     directory: Path,
     controls: list[Object],
+    service: str,
 ) -> Object:
-    recorder = Recorder(store, build_registry())
-    old, remote_reads = wait_for_flag(lab, event, case, True)
-    recorder.snapshots.publish(old.document)
-    capture = recorder.record(case.operation, event, "buggy")
+    _, remote_reads = wait_for_flag(lab, event, case, True)
+    first_request = make_request(service, case.operation, event, store)
+    capture = store.load_capture(str(first_request["capture_id"]))
+    old = store.load_snapshot(capture.snapshot_sha256)
     require(capture.reads == remote_reads, f"{case.label} capture differed from live Flagsmith.")
     require(
         capture.outcome
@@ -214,8 +228,9 @@ def run_case(
         transition["method"] == "PATCH" and transition["http_status"] == 200,
         f"{case.label} expected a real Flagsmith rule update.",
     )
-    new, updated_reads = wait_for_flag(lab, event, case, False)
-    store.save_snapshot(new)
+    _, updated_reads = wait_for_flag(lab, event, case, False)
+    retry = make_request(service, case.operation, event, store)
+    new = store.load_snapshot(str(retry["snapshot_sha256"]))
     lab.api.stack.wait(timeout=5)
     comparison = isolated(
         "compare",
@@ -231,7 +246,11 @@ def run_case(
     current = object_value(comparison.get("current"), "Current run")
     current_outcome = object_value(current.get("outcome"), "Current outcome")
     require(
-        current_outcome["status"] == "success" and current["reads"] == updated_reads,
+        first_request["http_status"] == 500
+        and retry["http_status"] == 200
+        and current_outcome["status"] == "success"
+        and current["reads"] == updated_reads == retry["reads"]
+        and canonical(retry["outcome"]) == canonical(current_outcome),
         f"{case.label} retry did not succeed under the updated live rules.",
     )
     changes = comparison.get("flag_changes")
@@ -250,20 +269,13 @@ def run_case(
         store, capture.id, load_expected(case.expected()), directory / "test", REGISTRY, "fixed"
     )
     test_sha = sha256(read_file(test, "exported pytest"))
-    before = pytest_result(test, "buggy", lab.api.stack.url, directory)
-    after = pytest_result(test, "fixed", lab.api.stack.url, directory)
+    red = pytest_result(test, "buggy", lab.api.stack.url, directory)
+    green = pytest_result(test, "fixed", lab.api.stack.url, directory)
     require(
-        before["exit_code"] == 1 and case.expected_message in str(before["log"]),
-        f"The buggy {case.label} test failed for an unexpected reason. See {directory}.",
+        red["outcome"] == capture.outcome
+        and test_sha == sha256(read_file(test, "exported pytest")),
+        "The failing pytest must reproduce the original error with the same test.",
     )
-    require(after["exit_code"] == 0, f"The fixed {case.label} test failed. See {directory}.")
-    require(
-        test_sha == sha256(read_file(test, "exported pytest")),
-        "The exported test changed between runs.",
-    )
-
-    red = run_regression(test.parent, "buggy", probe=lab.api.stack.url)
-    green = run_regression(test.parent, "fixed", probe=lab.api.stack.url)
     require(
         red["passed"] is False
         and green["passed"] is True
@@ -280,16 +292,40 @@ def run_case(
     )
 
     # The public evidence includes synthetic execution results, never environment documents or keys.
-    red["pytest_exit"] = before["exit_code"]
-    green["pytest_exit"] = after["exit_code"]
+    axes = read_json((DIRECTORY / case.assets / "axes.json").read_bytes(), "Flag axes")
+    matrix = isolated(
+        "explore",
+        {
+            "registry": REGISTRY,
+            "store": str(store.root),
+            "capture": capture.id,
+            "axes": axes,
+            "candidate": "fixed",
+        },
+        probe=lab.api.stack.url,
+    )
     return {
         "id": case.operation,
         "title": case.label,
+        "headline": "A pilot’s CSV export failed."
+        if case.operation == "csv-export"
+        else "Express quoting failed in Ridge Valley.",
         "description": case.description,
         "fix": case.fix,
         "occurred_at": capture.occurred_at,
         "transition": transition,
         "comparison": comparison,
+        "live_requests": {"original": first_request, "retry": retry},
+        "exploration": matrix,
+        "artifacts": sample_artifacts(
+            capture,
+            old,
+            build_registry(),
+            REGISTRY,
+            DIRECTORY / case.assets,
+            load_expected(case.expected()),
+            directory,
+        ),
         "regression": {"before": red, "after": green, "test_sha256": test_sha},
         "sdk_checks": list(controls),
     }
@@ -307,29 +343,32 @@ def run_demo(stack: Stack, output: Path) -> Path:
         run = Path(tempfile.mkdtemp(prefix="run-", dir=stack.state))
         store = Store(run / "store")
         event, controls = csv_inputs(lab)
-        first = run_case(lab, store, CSV, event, run / "csv-export", controls)
-        quote_event = QUOTE.event()
-        _, quote_values = wait_for_flag(lab, quote_event, QUOTE, True)
-        require(
-            flag_state(quote_values, REGIONAL).get("enabled") is True,
-            "Shipping quote requires the regional rate table.",
-        )
-        second = run_case(
-            lab,
-            store,
-            QUOTE,
-            quote_event,
-            run / "shipping-quote",
-            [
-                {
-                    "label": "Mountain zone segment",
-                    "identity": quote_event.identity,
-                    "parity": "live API and pinned document agree",
-                }
-            ],
-        )
+        with order_service(store, lambda: lab.snapshot().document) as service:
+            first = run_case(lab, store, CSV, event, run / "csv-export", controls, service)
+            quote_event = QUOTE.event()
+            _, quote_values = wait_for_flag(lab, quote_event, QUOTE, True)
+            require(
+                flag_state(quote_values, REGIONAL).get("enabled") is True,
+                "Shipping quote requires the regional rate table.",
+            )
+            second = run_case(
+                lab,
+                store,
+                QUOTE,
+                quote_event,
+                run / "shipping-quote",
+                [
+                    {
+                        "label": "Mountain zone segment",
+                        "identity": quote_event.identity,
+                        "parity": "live API and pinned document agree",
+                    }
+                ],
+                service,
+            )
         evidence: Object = {
-            "schema": 1,
+            "schema": 2,
+            "sample": "synthetic-orders",
             "generated_at": now(),
             "flagsmith_release": lab.version,
             "sdk": "6.5.0",

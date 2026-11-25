@@ -38,6 +38,16 @@ def load_expected(path: Path) -> JSON:
     raise FlightError("Provide the intended application result in a .csv or .json file.")
 
 
+def generated_test(spec_digest: str) -> bytes:
+    return (
+        '"""Verify the expected result against the original Flagsmith environment."""\n'
+        "from pathlib import Path\n\n"
+        "from flag_flight_recorder.regression import assert_regression\n\n\n"
+        "def test_flag_dependent_operation() -> None:\n"
+        f"    assert_regression(Path(__file__).parent, spec_sha256={spec_digest!r})\n"
+    ).encode()
+
+
 def export_pytest(
     store: Store,
     capture_id: str,
@@ -74,14 +84,7 @@ def export_pytest(
         }
         spec_bytes = canonical(spec)
         write_private(temporary / "regression.json", spec_bytes)
-        test_source = (
-            '"""Verify the expected result against the original Flagsmith environment."""\n'
-            "from pathlib import Path\n\n"
-            "from flag_flight_recorder.regression import assert_regression\n\n\n"
-            "def test_flag_dependent_operation() -> None:\n"
-            f"    assert_regression(Path(__file__).parent, spec_sha256={sha256(spec_bytes)!r})\n"
-        )
-        write_private(temporary / "test_incident.py", test_source.encode("utf-8"))
+        write_private(temporary / "test_incident.py", generated_test(sha256(spec_bytes)))
         try:
             temporary.rename(output)
         except OSError as error:
@@ -140,6 +143,7 @@ def evaluate_bundle(folder: Path, registry: Registry, version: str, spec_sha256:
         detail = "Historical flags and expected application result match."
     return {
         "passed": flags_match and outcome_matches,
+        "spec_sha256": spec_sha256,
         "detail": detail,
         "capture_id": capture.id,
         "operation": capture.operation,
@@ -183,5 +187,8 @@ def assert_regression(folder: Path, *, spec_sha256: str) -> None:
         spec_sha256=spec_sha256,
         probe=os.environ.get("FLIGHT_RECORDER_PROBE"),
     )
+    receipt = os.environ.get("FLIGHT_RECORDER_RESULT")
+    if receipt:
+        write_private(Path(receipt), canonical(result), replace=True)
     if not result["passed"]:
         raise AssertionError(f"{result['operation']} ({result['app_version']}): {result['detail']}")

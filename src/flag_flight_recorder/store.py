@@ -83,6 +83,27 @@ class Store:
             write_private(self.root / "fixtures" / f"{sha256(data)}.json", data)
         write_private(self.root / "captures" / f"{capture_id}.json", canonical(capture.document()))
 
+    def list_captures(self, operation: str | None, limit: int) -> list[Object]:
+        if not 1 <= limit <= 1000:
+            raise FlightError("Choose a capture limit between 1 and 1000.")
+        rows = []
+        for path in (self.root / "captures").glob("*.json"):
+            if not CAPTURE_ID.fullmatch(path.stem):
+                continue
+            raw = object_value(read_json(read_file(path, "capture"), "Capture"), "Capture")
+            if raw.get("id") != path.stem:
+                raise FlightError("Capture ID does not match the stored record.")
+            if operation is None or raw.get("operation") == operation:
+                row = {
+                    k: raw.get(k)
+                    for k in ("id", "occurred_at", "operation", "app_version", "snapshot_sha256")
+                }
+                row["status"] = object_value(raw.get("outcome"), "Outcome").get("status")
+                rows.append(row)
+        return sorted(
+            rows, key=lambda row: (str(row["occurred_at"]), str(row["id"])), reverse=True
+        )[:limit]
+
     def load_capture(self, capture_id: str) -> Capture:
         capture_id = checked_id(capture_id, CAPTURE_ID, "capture ID")
         raw = read_file(self.root / "captures" / f"{capture_id}.json", "capture")

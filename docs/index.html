@@ -1,0 +1,1565 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <meta
+      name="description"
+      content="Inspect the captured flags, application output and replay evidence for a Flagsmith incident."
+    />
+    <title>Incident trace · Flag Flight Recorder</title>
+    <style>
+      :root {
+  color-scheme: light;
+  --paper: #f2f1eb;
+  --surface: #fffefa;
+  --ink: #1d272c;
+  --muted: #4e5a60;
+  --line: #bfc4bf;
+  --blue: #194f9d;
+  --bluewash: #e6eefb;
+  --ok: #105a42;
+  --bad: #982e24;
+  --orange: #ff8a40;
+  --mono:
+    "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --sans: Inter, "Segoe UI", Arial, sans-serif;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 15px/1.45 var(--sans);
+}
+h1,
+h2,
+h3,
+p,
+dl,
+dd {
+  margin: 0;
+}
+button,
+select {
+  font: inherit;
+  color: inherit;
+}
+button,
+select,
+summary {
+  cursor: pointer;
+}
+button:focus-visible,
+summary:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 3px solid #ec7e33;
+  outline-offset: 3px;
+}
+.skip {
+  position: fixed;
+  left: 12px;
+  top: -90px;
+  z-index: 2;
+  background: white;
+  color: var(--ink);
+  padding: 10px;
+}
+.skip:focus {
+  top: 8px;
+}
+.shell {
+  width: min(1280px, calc(100% - 96px));
+  margin-inline: auto;
+}
+.bar {
+  background: #202a30;
+  color: #fff;
+  border-bottom: 4px solid #ef8034;
+}
+.bar .shell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 58px;
+}
+.brand {
+  font-size: 18px;
+  font-weight: 720;
+  letter-spacing: -0.045em;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.rec-mark {
+  align-items: center;
+  display: flex;
+  gap: 3px;
+  height: 25px;
+}
+.rec-mark i {
+  display: block;
+  width: 4px;
+  background: var(--orange);
+}
+.rec-mark i:nth-child(1) {
+  height: 8px;
+}
+.rec-mark i:nth-child(2) {
+  height: 17px;
+}
+.rec-mark i:nth-child(3) {
+  height: 24px;
+}
+.rec-mark i:nth-child(4) {
+  height: 12px;
+}
+.save {
+  border: 1px solid #94a0a3;
+  background: transparent;
+  color: #fafbf8;
+  padding: 6px 12px;
+  border-radius: 2px;
+  font-size: 13px;
+}
+.save:hover {
+  background: #34434a;
+}
+.save span {
+  color: #feaa71;
+  margin-right: 5px;
+}
+main {
+  padding: 24px 0 36px;
+}
+.case-nav {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex-wrap: wrap;
+  margin-bottom: 17px;
+}
+.case-nav label,
+.micro,
+.table-caption,
+.signal dt,
+summary {
+  font: 650 11px/1.4 var(--mono);
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+.case-nav label,
+.micro {
+  color: var(--muted);
+}
+.case-nav select {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 5px 24px 5px 9px;
+  border-radius: 2px;
+  font-size: 13px;
+  font-weight: 650;
+}
+.case-id {
+  margin-left: auto;
+  font: 12px/1.5 var(--mono);
+  color: var(--muted);
+}
+h1 {
+  font-size: clamp(34px, 4.2vw, 64px);
+  line-height: 1.02;
+  letter-spacing: -0.069em;
+  font-weight: 740;
+  max-width: 22ch;
+  text-wrap: balance;
+}
+.dek {
+  margin: 12px 0 22px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #435159;
+  max-width: 80ch;
+}
+section.trace {
+  border-block: 2px solid var(--ink);
+  background: var(--surface);
+}
+.trace-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+}
+h2 {
+  font-size: 18px;
+  letter-spacing: -0.035em;
+}
+.trace-head p {
+  font: 12px/1.5 var(--mono);
+  color: var(--muted);
+}
+.matrix {
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: fixed;
+}
+.matrix thead {
+  vertical-align: bottom;
+}
+.matrix tr > * {
+  border-bottom: 1px solid #d1d4cf;
+}
+.matrix tr:last-child > * {
+  border-bottom: 0;
+}
+.matrix th,
+.matrix td {
+  vertical-align: middle;
+  text-align: left;
+}
+.matrix th:first-child {
+  width: 23%;
+  padding: 9px 18px;
+  font-size: 13px;
+}
+.matrix thead th:first-child {
+  font: 650 11px/1.5 var(--mono);
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.matrix td {
+  font: 13px/1.4 var(--mono);
+  padding: 7px 12px;
+}
+.matrix td.selected,
+.matrix th.selected {
+  background: var(--bluewash);
+}
+.matrix tbody tr:first-child td {
+  font-size: 17px;
+  font-weight: 650;
+}
+.matrix tbody tr:nth-child(-n + 2) th {
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.stage {
+  position: relative;
+  border: 0;
+  text-align: left;
+  background: transparent;
+  width: 100%;
+  padding: 14px 12px 16px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+  min-height: 54px;
+}
+.stage:hover {
+  background: #f1f3ee;
+}
+.stage[aria-pressed="true"] {
+  color: var(--blue);
+  background: var(--bluewash);
+}
+.stage:after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  height: 2px;
+  left: 0;
+  right: 0;
+  background: #adb6b8;
+}
+.stage:before {
+  content: "";
+  z-index: 1;
+  position: absolute;
+  bottom: -3px;
+  left: 14px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid #52636d;
+}
+.stage[aria-pressed="true"]:before {
+  border-color: var(--blue);
+  background: var(--blue);
+}
+.stage[aria-pressed="true"]:after {
+  background: var(--blue);
+}
+.stage:focus-visible {
+  outline-offset: -3px;
+}
+.matrix .level {
+  position: relative;
+  height: 60px;
+  vertical-align: bottom;
+  padding-bottom: 6px;
+}
+.wave {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.wave::before {
+  content: "";
+  position: absolute;
+  top: 13px;
+  left: 0;
+  right: 0;
+  border-top: 2px solid #a44919;
+}
+.wave.low::before {
+  top: 28px;
+}
+.wave.transition::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 13px;
+  height: 15px;
+  border-left: 2px solid #a44919;
+}
+.wave .sample {
+  position: absolute;
+  top: 10px;
+  left: 15px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid #a44919;
+  border-radius: 50%;
+  background: var(--surface);
+}
+.wave.low .sample {
+  top: 25px;
+}
+.delta .held {
+  display: block;
+}
+.matrix .status {
+  font: 680 13px/1.4 var(--sans);
+}
+.good {
+  color: var(--ok);
+}
+.bad {
+  color: var(--bad);
+}
+.neutral {
+  color: var(--ink);
+}
+.mobile-trace {
+  display: none;
+}
+.readout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  margin-top: 20px;
+  border: 1px solid var(--line);
+  border-left: 0;
+}
+.output {
+  color: #f3f5ed;
+  background: #202b32;
+  border-left: 5px solid #f68a40;
+  padding: 19px 21px;
+  min-width: 0;
+}
+.output .micro {
+  color: #c3cbd0;
+}
+.output h3 {
+  font-size: 22px;
+  letter-spacing: -0.04em;
+  margin: 5px 0 9px;
+}
+.output pre {
+  color: #ffcea8;
+  font: 14px/1.55 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.output pre.success {
+  color: #b1e1cf;
+}
+.output .explain {
+  color: #c6d1d6;
+  margin-top: 14px;
+  font-size: 13px;
+  max-width: 65ch;
+}
+.proof {
+  background: #f9f9f4;
+  padding: 19px 21px;
+  min-width: 0;
+}
+.proof h3 {
+  font-size: 16px;
+  letter-spacing: -0.02em;
+  margin-bottom: 7px;
+}
+.signal > div {
+  display: grid;
+  grid-template-columns: minmax(95px, 40%) 1fr;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 0;
+  border-top: 1px solid #d3d7d1;
+}
+.signal dt {
+  font-size: 10px;
+  color: var(--muted);
+}
+.signal dd {
+  font: 13px/1.4 var(--mono);
+  overflow-wrap: anywhere;
+}
+details {
+  border-bottom: 1px solid var(--line);
+  margin-top: 12px;
+}
+summary {
+  display: list-item;
+  padding: 10px 0;
+  color: var(--muted);
+  width: fit-content;
+}
+details .signal {
+  margin: 0 0 16px;
+  max-width: 850px;
+}
+footer {
+  color: var(--muted);
+  font: 11px/1.5 var(--mono);
+  margin-top: 14px;
+}
+@media (max-width: 900px) {
+  .shell {
+    width: calc(100% - 44px);
+  }
+  .matrix th:first-child {
+    width: 22%;
+    padding-left: 11px;
+  }
+  .matrix td {
+    padding-inline: 8px;
+  }
+  .stage {
+    padding-inline: 8px;
+    font-size: 14px;
+  }
+}
+@media (max-width: 700px) {
+  .shell {
+    width: calc(100% - 32px);
+  }
+  .bar .shell {
+    min-height: 50px;
+  }
+  .brand {
+    font-size: 16px;
+    gap: 8px;
+  }
+  .save {
+    font-size: 12px;
+    padding: 5px 7px;
+  }
+  main {
+    padding-top: 15px;
+  }
+  .case-nav {
+    margin-bottom: 13px;
+    gap: 7px;
+  }
+  .case-id {
+    font-size: 10px;
+  }
+  .dek {
+    margin: 9px 0 14px;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .trace-head {
+    padding: 9px 10px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .trace-head p {
+    font-size: 10px;
+  }
+  h2 {
+    font-size: 16px;
+  }
+  .matrix {
+    display: none;
+  }
+  .mobile-trace {
+    display: block;
+  }
+  .m-stages {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .m-stage {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    flex-direction: column;
+    background: var(--surface);
+    text-align: left;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 9px 10px;
+    line-height: 1.1;
+  }
+  .m-stage:nth-child(odd) {
+    border-right: 1px solid var(--line);
+  }
+  .m-stage strong {
+    font-size: 13px;
+  }
+  .m-stage span {
+    font-size: 12px;
+  }
+  .m-stage[aria-pressed="true"] {
+    background: var(--bluewash);
+    box-shadow: inset 3px 0 var(--blue);
+  }
+  .delta {
+    padding: 8px 10px;
+    line-height: 1.5;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+  .delta code {
+    font-weight: 650;
+  }
+  .readout {
+    grid-template-columns: 1fr;
+    margin-top: 14px;
+  }
+  .output,
+  .proof {
+    padding: 14px;
+  }
+  .output h3 {
+    font-size: 20px;
+  }
+  .output pre {
+    font-size: 13px;
+  }
+  .output .explain {
+    margin-top: 8px;
+  }
+  .proof {
+    border-left: 1px solid var(--line);
+  }
+  summary {
+    font-size: 10px;
+  }
+  .case-nav select {
+    padding-right: 8px;
+  }
+}
+@media (max-width: 370px) {
+  .brand {
+    font-size: 14px;
+  }
+  .case-id {
+    display: none;
+  }
+  .shell {
+    width: calc(100% - 24px);
+  }
+  h1 {
+    font-size: 31px;
+  }
+  .save {
+    font-size: 11px;
+  }
+  .dek {
+    font-size: 13px;
+  }
+}
+[hidden] {
+  display: none !important;
+}
+button {
+  touch-action: manipulation;
+}
+.jump,
+#copy,
+#regression-body button,
+footer button {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 5px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.jump {
+  color: var(--blue);
+  font-weight: 680;
+}
+.jump:hover,
+#copy:hover,
+footer button:hover,
+#regression-body button:hover {
+  background: var(--bluewash);
+}
+.case-nav {
+  row-gap: 8px;
+}
+.matrix th:first-child {
+  overflow-wrap: anywhere;
+}
+.matrix td {
+  overflow-wrap: anywhere;
+}
+.matrix .stage {
+  overflow-wrap: anywhere;
+}
+.signal dd,
+.cell-evidence pre {
+  white-space: pre-wrap;
+}
+.explorer {
+  margin-block: 30px 18px;
+  border-top: 3px solid var(--ink);
+  scroll-margin-top: 14px;
+}
+.explorer-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 16px 0;
+}
+.explorer h2 {
+  font-size: 27px;
+  letter-spacing: -0.05em;
+}
+.explorer-head > p {
+  max-width: 48ch;
+  font-size: 13px;
+  color: var(--muted);
+}
+.experiment {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.experiment > div {
+  min-width: 0;
+  padding: 18px;
+}
+.cell-evidence {
+  border-left: 1px solid var(--line);
+}
+.cell-evidence h3 {
+  font-size: 16px;
+  letter-spacing: -0.03em;
+}
+.cell-evidence h4 {
+  font: 650 11px/1.4 var(--mono);
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 13px 0 3px;
+}
+.cell-evidence pre,
+#regression-body pre {
+  font: 12px/1.5 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+}
+.axes {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 3px;
+  font-size: 13px;
+}
+.axes caption {
+  text-align: left;
+  overflow-wrap: anywhere;
+  font: 600 11px/1.5 var(--mono);
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.axes th {
+  text-align: left;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.axes th:first-child {
+  width: 18%;
+}
+.axes td {
+  padding: 0;
+}
+.axes button {
+  min-height: 46px;
+  width: 100%;
+  background: #f1f4ee;
+  border: 1px solid #bbc7bd;
+  text-align: left;
+  padding: 8px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ok);
+}
+.axes button.failure {
+  background: #f7e9df;
+  border-color: #dab4a1;
+  color: var(--bad);
+}
+.axes button[aria-pressed="true"] {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+.axes button:focus-visible {
+  outline: 3px solid #aa4e11;
+  outline-offset: 1px;
+}
+.lab-note,
+details p,
+#replay-command p {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 7px 0;
+}
+.cell-evidence details {
+  margin: 7px 0 0;
+}
+.cell-evidence summary {
+  padding: 4px 0;
+}
+.cell-evidence pre {
+  color: var(--ink);
+}
+#regression-body {
+  padding-bottom: 14px;
+}
+#regression-body pre {
+  background: var(--surface);
+  padding: 12px;
+  margin: 8px 0;
+}
+#replay-command {
+  margin-top: 19px;
+}
+#replay-command h2 {
+  font-size: 16px;
+}
+.command {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+}
+.command code {
+  font: 12px/1.5 var(--mono);
+  overflow-wrap: anywhere;
+}
+.command button {
+  margin-left: auto;
+}
+footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.stage[aria-pressed="true"] {
+  box-shadow: inset 0 2px var(--blue);
+}
+#regression-body button {
+  font-family: var(--sans);
+}
+.output pre {
+  max-height: 230px;
+  overflow: auto;
+}
+.m-stage {
+  min-height: 48px;
+}
+.signal dd {
+  margin: 0;
+}
+@media (max-width: 700px) {
+  .experiment {
+    grid-template-columns: 1fr;
+  }
+  .experiment > div {
+    padding: 10px;
+  }
+  .cell-evidence {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .explorer-head {
+    display: block;
+    margin: 12px 0;
+  }
+  .explorer-head > p {
+    margin-top: 6px;
+  }
+  .jump {
+    font-size: 11px;
+    padding: 4px 7px;
+  }
+  .case-id {
+    display: none;
+  }
+  .explorer h2 {
+    font-size: 23px;
+  }
+  .axes button {
+    min-height: 44px;
+  }
+  .output .explain {
+    font-size: 12px;
+  }
+  footer {
+    align-items: start;
+  }
+  .trace-head p {
+    display: none;
+  }
+}
+
+    </style>
+  </head>
+  <body>
+    <a class="skip" href="#investigation">Skip to incident</a>
+    <header class="bar">
+      <div class="shell">
+        <div class="brand">
+          <span aria-hidden="true" class="rec-mark"
+            ><i></i><i></i><i></i><i></i></span
+          >Flag Flight Recorder
+        </div>
+        <button type="button" class="save" id="save">
+          <span aria-hidden="true">↓</span> Evidence JSON
+        </button>
+      </div>
+    </header>
+    <main class="shell" id="investigation" tabindex="-1">
+      <nav class="case-nav" aria-label="Incident selection">
+        <label for="case">Incident</label
+        ><select id="case"></select
+        ><button type="button" class="jump" id="jump" hidden>
+          Try flag combinations ↓</button
+        ><span class="case-id" id="case-id"></span>
+      </nav>
+      <h1 id="headline"></h1>
+      <p class="dek" id="dek"></p>
+      <section class="trace" aria-labelledby="trace-title">
+        <div class="trace-head">
+          <h2 id="trace-title">Execution trace</h2>
+          <p>Same identity and input</p>
+        </div>
+        <table
+          class="matrix"
+          id="matrix"
+          aria-label="Recorded flags, code and outcomes by stage"
+        ></table>
+        <div class="mobile-trace">
+          <div
+            class="m-stages"
+            id="m-stages"
+            role="group"
+            aria-label="Inspect a recorded stage"
+          ></div>
+          <p class="delta" id="delta"></p>
+        </div>
+      </section>
+      <section
+        class="readout"
+        aria-label="Selected stage evidence"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <div class="output">
+          <p class="micro" id="stage-kind"></p>
+          <h3 id="output-title"></h3>
+          <pre id="output"></pre>
+          <p id="explain" class="explain"></p>
+        </div>
+        <div class="proof">
+          <h3 id="proof-title"></h3>
+          <dl class="signal" id="proof"></dl>
+        </div>
+      </section>
+      <section
+        id="explorer"
+        class="explorer"
+        aria-labelledby="explorer-title"
+        hidden
+        tabindex="-1"
+      >
+        <div class="explorer-head">
+          <div>
+            <p class="micro">Controlled offline runs</p>
+            <h2 id="explorer-title">Try flag combinations</h2>
+          </div>
+          <p>
+            Choose a cell to inspect both applications with the same input. Only
+            the two effective flag settings vary.
+          </p>
+        </div>
+        <div class="experiment">
+          <div id="grid"></div>
+          <div class="cell-evidence" aria-live="polite">
+            <h3 id="cell-title"></h3>
+            <div id="cell-output"></div>
+          </div>
+        </div>
+      </section>
+      <details id="regression">
+        <summary>Inspect the regression test and code change</summary>
+        <div id="regression-body"></div>
+      </details>
+      <details id="provenance">
+        <summary>Inspect source fingerprints and SDK checks</summary>
+        <dl class="signal" id="origins"></dl>
+      </details>
+      <section id="replay-command" hidden>
+        <h2>Replay this capture</h2>
+        <p>
+          Set FLIGHT_RECORDER_STORE to this run’s store directory, then run the
+          command from the application checkout.
+        </p>
+        <div class="command">
+          <code id="command"></code
+          ><button type="button" id="copy">Copy command</button>
+        </div>
+      </section>
+      <footer>
+        <span id="meta"></span
+        ><button type="button" id="summary">Download anonymous summary</button>
+      </footer>
+      <noscript>Enable JavaScript to inspect the recorded evidence.</noscript>
+    </main>
+    <script type="application/json" id="evidence">
+      {"cases":[{"artifacts":{"filename":"csv-export-synthetic-pytest.zip","fixture_snapshot":"0b551dc3bb2e133a88a1ee3e2edfd37ad4dc0d0acfbac26d9bb731e2ca460d48","fixture_spec":"9fc9570268567d635127cc611aad93f65644a4c0ee48fcd16d61da9f648a8eab","patch":"--- csv-export/buggy.py\n+++ csv-export/fixed.py\n@@ -1,4 +1,4 @@\n-\"\"\"The original version of the CSV operation, retained for historical replay.\"\"\"\n+\"\"\"CSV export with the selected columns applied to streamed rows.\"\"\"\n \n from flag_flight_recorder import OperationContext\n \n@@ -7,7 +7,5 @@\n \n def export_report(context: OperationContext) -\u003e str:\n     rows, streaming, columns = report_settings(context)\n-    if streaming:\n-        # The original streaming path supplied columns outside the selected profile.\n-        return write_csv(rows, columns)\n-    return write_csv([project_row(row, columns) for row in rows], columns)\n+    projected = (project_row(row, columns) for row in rows)\n+    return write_csv(projected if streaming else list(projected), columns)\n","runtime":{"engine":"11.1.2","flagsmith":"6.5.0","implementation":"CPython","python":"3.13.5"},"zip_base64":"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","zip_sha256":"2b633e5cec746cebef15087b0f579f212ad1f27e4a909ab543daaa9efae81c12"},"comparison":{"app_sha256":"8b76e7b8a5202642375335e2bdb6e226ea77a7cd7b94dd5db637e9e49948964c","app_version":"buggy","capture_id":"30e487b7930bb2f5c789d46c","current":{"outcome":{"result":"order_id,total_inr\nORD-1001,1250.00\nORD-1002,2475.50\n","status":"success"},"reads":{"export_column_profile":{"enabled":true,"value":"summary"},"stream_report_rows":{"enabled":false}},"snapshot_sha256":"4a57becc8195b31eefded93ce6f3bcfeb41ffb03d9ef268af120db315b3dd752"},"event_sha256":"e50911ecd5bad968d60b02b5096a26fa80f8a161eeb6eac23dbf337bd1c5105e","flag_changes":[{"after":{"enabled":false},"before":{"enabled":true},"name":"stream_report_rows"}],"historical":{"outcome":{"message":"dict contains fields not in fieldnames: 'customer'","status":"error","type":"ValueError"},"reads":{"export_column_profile":{"enabled":true,"value":"summary"},"stream_report_rows":{"enabled":true}},"snapshot_sha256":"bd3d66f446d27e50561e413e52f1fed41bbf8dfbf96f2141c64b09d91028b9ec"},"identity":"synthetic-pilot-04","isolation":{"connection_error":"ENETUNREACH","interfaces":["lo"],"isolated":true,"live_listener_reachable":false,"namespace":"net:[4026534239]","probe_host":"127.0.0.1","probe_port":13934},"occurred_at":"2026-11-25T15:32:34.577+00:00","operation":"csv-export","outcome_changed":true,"reasons":{"export_column_profile":"SPLIT; weight=50.0","stream_report_rows":"TARGETING_MATCH; segment=Pilot Plan"},"recorded":{"outcome":{"message":"dict contains fields not in fieldnames: 'customer'","status":"error","type":"ValueError"},"reads":{"export_column_profile":{"enabled":true,"value":"summary"},"stream_report_rows":{"enabled":true}},"snapshot_sha256":"bd3d66f446d27e50561e413e52f1fed41bbf8dfbf96f2141c64b09d91028b9ec"},"registry":"examples.registry:build_registry","runtime":{"engine":"11.1.2","flagsmith":"6.5.0","implementation":"CPython","python":"3.13.5"},"status":"reproduced","traits":{"plan":"pilot"}},"description":"The pilot streaming path writes a customer column into a summary export.","exploration":{"axes":[{"field":"enabled","flag":"stream_report_rows","values":[false,true]},{"field":"value","flag":"export_column_profile","values":["summary","detailed"]}],"baseline_settings":[true,"summary"],"candidate_app_sha256":"75cbcd6ed6a690e8da1f47e2aff2d6fbfaffe0c8532488307249a1057a292780","candidate_version":"fixed","capture_id":"30e487b7930bb2f5c789d46c","cells":[{"candidate":{"outcome":{"result":"order_id,total_inr\nORD-1001,1250.00\nORD-1002,2475.50\n","status":"success"},"reads":{"export_column_profile":{"enabled":true,"value":"summary"},"stream_report_rows":{"enabled":false}}},"original":{"outcome":{"result":"order_id,total_inr\nORD-1001,1250.00\nORD-1002,2475.50\n","status":"success"},"reads":{"export_column_profile":{"enabled":true,"value":"summary"},"stream_report_rows":{"enabled":false}}},"settings":[false,"summary"],"snapshot_sha256":"03464157b4ae6e7c3a64d5fd9940adc95a444b454984b06f3cc11bb4a171e1f4"},{"candidate":{"outcome":{"result":"order_id,customer,total_inr\nORD-1001,Demo East,1250.00\nORD-1002,Demo West,2475.50\n","status":"success"},"reads":{"export_column_profile":{"enabled":true,"value":"detailed"},"stream_report_rows":{"enabled":false}}},"original":{"outcome":{"result":"order_id,customer,total_inr\nORD-1001,Demo East,1250.00\nORD-1002,Demo West,2475.50\n","status":"success"},"reads":{"export_column_profile":{"enabled":true,"value":"detailed"},"stream_report_rows":{"enabled":false}}},"settings":[false,"detailed"],"snapshot_sha256":"577ac979bc8d4808cedd51d227a7b00f45ecea772c68034c2accc8b1d34bb12d"},{"candidate":{"outcome":{"result":"order_id,total_inr\nORD-1001,1250.00\nORD-1002,2475.50\n","status":"success"},"reads":{"export_column_profile":{"enabled":true,"value":"summary"},"stream_report_rows":{"enabled":true}}},"original":{"outcome":{"message":"dict contains fields not in fieldnames: 'customer'","status":"error","type":"ValueError"},"reads":{"export_column_profile":{"enabled":true,"value":"summary"},"stream_report_rows":{"enabled":true}}},"settings":[true,"summary"],"snapshot_sha256":"4f26be17d488ac21b7a816b17ae8f735e670d9412547fbe6748cb3a0863cadc3"},{"candidate":{"outcome":{"result":"order_id,customer,total_inr\nORD-1001,Demo East,1250.00\nORD-1002,Demo West,2475.50\n","status":"success"},"reads":{"export_column_profile":{"enabled":true,"value":"detailed"},"stream_report_rows":{"enabled":true}}},"original":{"outcome":{"result":"order_id,customer,total_inr\nORD-1001,Demo East,1250.00\nORD-1002,Demo West,2475.50\n","status":"success"},"reads":{"export_column_profile":{"enabled":true,"value":"detailed"},"stream_report_rows":{"enabled":true}}},"settings":[true,"detailed"],"snapshot_sha256":"9a87c68965dcb6b70485b43aa26867b47594834ed02484389b8f0e200cfd53a0"}],"event_sha256":"e50911ecd5bad968d60b02b5096a26fa80f8a161eeb6eac23dbf337bd1c5105e","historical_snapshot":"bd3d66f446d27e50561e413e52f1fed41bbf8dfbf96f2141c64b09d91028b9ec","isolation":{"connection_error":"ENETUNREACH","interfaces":["lo"],"isolated":true,"live_listener_reachable":false,"namespace":"net:[4026534239]","probe_host":"127.0.0.1","probe_port":13934},"kind":"effective-flag-combinations","original_app_sha256":"8b76e7b8a5202642375335e2bdb6e226ea77a7cd7b94dd5db637e9e49948964c","original_version":"buggy"},"fix":"Project each streamed row onto the selected report columns before passing it to the CSV writer.","headline":"A pilot’s CSV export failed.","id":"csv-export","live_requests":{"original":{"app_sha256":"8b76e7b8a5202642375335e2bdb6e226ea77a7cd7b94dd5db637e9e49948964c","capture_id":"30e487b7930bb2f5c789d46c","event_sha256":"e50911ecd5bad968d60b02b5096a26fa80f8a161eeb6eac23dbf337bd1c5105e","http_status":500,"method":"POST","occurred_at":"2026-11-25T15:32:34.577+00:00","outcome":{"message":"dict contains fields not in fieldnames: 'customer'","status":"error","type":"ValueError"},"path":"/exports","reads":{"export_column_profile":{"enabled":true,"value":"summary"},"stream_report_rows":{"enabled":true}},"snapshot_sha256":"bd3d66f446d27e50561e413e52f1fed41bbf8dfbf96f2141c64b09d91028b9ec"},"retry":{"app_sha256":"8b76e7b8a5202642375335e2bdb6e226ea77a7cd7b94dd5db637e9e49948964c","capture_id":"984c1f1565d0e79dbf7bd53d","event_sha256":"e50911ecd5bad968d60b02b5096a26fa80f8a161eeb6eac23dbf337bd1c5105e","http_status":200,"method":"POST","occurred_at":"2026-11-25T15:32:34.922+00:00","outcome":{"result":"order_id,total_inr\nORD-1001,1250.00\nORD-1002,2475.50\n","status":"success"},"path":"/exports","reads":{"export_column_profile":{"enabled":true,"value":"summary"},"stream_report_rows":{"enabled":false}},"snapshot_sha256":"4a57becc8195b31eefded93ce6f3bcfeb41ffb03d9ef268af120db315b3dd752"}},"occurred_at":"2026-11-25T15:32:34.577+00:00","regression":{"after":{"app_sha256":"75cbcd6ed6a690e8da1f47e2aff2d6fbfaffe0c8532488307249a1057a292780","app_version":"fixed","capture_id":"30e487b7930bb2f5c789d46c","detail":"Historical flags and expected application result match.","event_sha256":"e50911ecd5bad968d60b02b5096a26fa80f8a161eeb6eac23dbf337bd1c5105e","expected":"order_id,total_inr\nORD-1001,1250.00\nORD-1002,2475.50\n","flags_match":true,"isolation":{"connection_error":"ENETUNREACH","interfaces":["lo"],"isolated":true,"live_listener_reachable":false,"namespace":"net:[4026534239]","probe_host":"127.0.0.1","probe_port":13934},"operation":"csv-export","outcome":{"result":"order_id,total_inr\nORD-1001,1250.00\nORD-1002,2475.50\n","status":"success"},"passed":true,"pytest_exit":0,"reads":{"export_column_profile":{"enabled":true,"value":"summary"},"stream_report_rows":{"enabled":true}},"snapshot_sha256":"bd3d66f446d27e50561e413e52f1fed41bbf8dfbf96f2141c64b09d91028b9ec","spec_sha256":"624f05281d55e647e431c55df2dc4a824093c5ead6fa4661ddfab1000cae2b51"},"before":{"app_sha256":"8b76e7b8a5202642375335e2bdb6e226ea77a7cd7b94dd5db637e9e49948964c","app_version":"buggy","capture_id":"30e487b7930bb2f5c789d46c","detail":"ValueError: dict contains fields not in fieldnames: 'customer'","event_sha256":"e50911ecd5bad968d60b02b5096a26fa80f8a161eeb6eac23dbf337bd1c5105e","expected":"order_id,total_inr\nORD-1001,1250.00\nORD-1002,2475.50\n","flags_match":true,"isolation":{"connection_error":"ENETUNREACH","interfaces":["lo"],"isolated":true,"live_listener_reachable":false,"namespace":"net:[4026534239]","probe_host":"127.0.0.1","probe_port":13934},"operation":"csv-export","outcome":{"message":"dict contains fields not in fieldnames: 'customer'","status":"error","type":"ValueError"},"passed":false,"pytest_exit":1,"reads":{"export_column_profile":{"enabled":true,"value":"summary"},"stream_report_rows":{"enabled":true}},"snapshot_sha256":"bd3d66f446d27e50561e413e52f1fed41bbf8dfbf96f2141c64b09d91028b9ec","spec_sha256":"624f05281d55e647e431c55df2dc4a824093c5ead6fa4661ddfab1000cae2b51"},"binding":"verified","test_sha256":"8132182a353c2f0119f4df3b29fc455b48e470629729558b7bbed307f143c09f"},"sdk_checks":[{"identity":"synthetic-pilot-04","label":"Environment default","parity":"live API and pinned document agree","streaming":false,"variant":"summary"},{"identity":"synthetic-pilot-04","label":"Pilot segment","parity":"live API and pinned document agree","streaming":true,"variant":"summary"},{"identity":"synthetic-pilot-support-control","label":"Identity override","parity":"live API and pinned document agree","streaming":false,"variant":"summary"},{"identity":"synthetic-pilot-00","label":"Weighted variant","parity":"live API and pinned document agree","streaming":true,"variant":"detailed"}],"title":"CSV export","transition":{"after":false,"before":true,"flag":"stream_report_rows","http_status":200,"method":"PATCH","occurred_at":"2026-11-25T15:32:34.825+00:00","segment":"Pilot Plan"}},{"artifacts":{"filename":"shipping-quote-synthetic-pytest.zip","fixture_snapshot":"be86747c5a416331f2aff84ba88469e22d4e0db94f6e0a7f758cb6e951d981d3","fixture_spec":"2125adb8a369ba651ae651ddad7480d4f6e3e3e78b3fb6429dcef99659135668","patch":"--- shipping-quote/buggy.py\n+++ shipping-quote/fixed.py\n@@ -1,4 +1,4 @@\n-\"\"\"Original quote handler with a sparse rate-table lookup.\"\"\"\n+\"\"\"Quote handler that reports a missing service explicitly.\"\"\"\n \n from flag_flight_recorder import OperationContext\n from flag_flight_recorder.model import Object\n@@ -8,4 +8,6 @@\n \n def quote(context: OperationContext) -\u003e Object:\n     destination, service, available = selection(context)\n+    if service not in available:\n+        return {\"status\": \"unavailable\", \"destination\": destination, \"service\": service}\n     return quoted(destination, service, available[service])\n","runtime":{"engine":"11.1.2","flagsmith":"6.5.0","implementation":"CPython","python":"3.13.5"},"zip_base64":"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","zip_sha256":"c15e4d363d9d2bd421298158ebb605a6378b2ad38e614f78da69097fac362e75"},"comparison":{"app_sha256":"3933c78d4977bb6a4c851baf634e33cc5ab2c613a477d4932d73e3a8b253f0c5","app_version":"buggy","capture_id":"99407c4cb2d981b905d749ea","current":{"outcome":{"result":{"amount_minor":1400,"destination":"Ridge Valley","service":"standard","status":"quoted"},"status":"success"},"reads":{"enable_express_quotes":{"enabled":false},"use_regional_rates":{"enabled":true}},"snapshot_sha256":"92b3accb3a47cc8528867139b4a60df2aa56e78a2f413ff5f685874f8edd9b60"},"event_sha256":"1d5b80c34e1f22f7280b00da02023b96c74fd3f6e74058309c4e1ac802703ffb","flag_changes":[{"after":{"enabled":false},"before":{"enabled":true},"name":"enable_express_quotes"}],"historical":{"outcome":{"message":"'express'","status":"error","type":"KeyError"},"reads":{"enable_express_quotes":{"enabled":true},"use_regional_rates":{"enabled":true}},"snapshot_sha256":"59aa07ec12bf009a0bea57cda2721c7a23900261808e6e1d6af3bb02383bdbfd"},"identity":"synthetic-mountain-01","isolation":{"connection_error":"ENETUNREACH","interfaces":["lo"],"isolated":true,"live_listener_reachable":false,"namespace":"net:[4026534239]","probe_host":"127.0.0.1","probe_port":13934},"occurred_at":"2026-11-25T15:32:36.895+00:00","operation":"shipping-quote","outcome_changed":true,"reasons":{"enable_express_quotes":"TARGETING_MATCH; segment=Mountain Zone","use_regional_rates":"TARGETING_MATCH; segment=Mountain Zone"},"recorded":{"outcome":{"message":"'express'","status":"error","type":"KeyError"},"reads":{"enable_express_quotes":{"enabled":true},"use_regional_rates":{"enabled":true}},"snapshot_sha256":"59aa07ec12bf009a0bea57cda2721c7a23900261808e6e1d6af3bb02383bdbfd"},"registry":"examples.registry:build_registry","runtime":{"engine":"11.1.2","flagsmith":"6.5.0","implementation":"CPython","python":"3.13.5"},"status":"reproduced","traits":{"zone":"mountain"}},"description":"A regional express quote reaches a destination with a standard rate only.","exploration":{"axes":[{"field":"enabled","flag":"use_regional_rates","values":[false,true]},{"field":"enabled","flag":"enable_express_quotes","values":[false,true]}],"baseline_settings":[true,true],"candidate_app_sha256":"79ce1aeaf86a33ce0d489b73abdc488d4e1c2be1665566967048d794b31975ea","candidate_version":"fixed","capture_id":"99407c4cb2d981b905d749ea","cells":[{"candidate":{"outcome":{"result":{"amount_minor":900,"destination":"Ridge Valley","service":"standard","status":"quoted"},"status":"success"},"reads":{"enable_express_quotes":{"enabled":false},"use_regional_rates":{"enabled":false}}},"original":{"outcome":{"result":{"amount_minor":900,"destination":"Ridge Valley","service":"standard","status":"quoted"},"status":"success"},"reads":{"enable_express_quotes":{"enabled":false},"use_regional_rates":{"enabled":false}}},"settings":[false,false],"snapshot_sha256":"f91cacbf21b5ac5a108b96d1f2bf16a467b85e36f4184533a29b6f3fb084d6ea"},{"candidate":{"outcome":{"result":{"amount_minor":1800,"destination":"Ridge Valley","service":"express","status":"quoted"},"status":"success"},"reads":{"enable_express_quotes":{"enabled":true},"use_regional_rates":{"enabled":false}}},"original":{"outcome":{"result":{"amount_minor":1800,"destination":"Ridge Valley","service":"express","status":"quoted"},"status":"success"},"reads":{"enable_express_quotes":{"enabled":true},"use_regional_rates":{"enabled":false}}},"settings":[false,true],"snapshot_sha256":"2eab90192499ecdadd5d288b5ebb2a850828052d5ddbb978d3dba90d407e0c74"},{"candidate":{"outcome":{"result":{"amount_minor":1400,"destination":"Ridge Valley","service":"standard","status":"quoted"},"status":"success"},"reads":{"enable_express_quotes":{"enabled":false},"use_regional_rates":{"enabled":true}}},"original":{"outcome":{"result":{"amount_minor":1400,"destination":"Ridge Valley","service":"standard","status":"quoted"},"status":"success"},"reads":{"enable_express_quotes":{"enabled":false},"use_regional_rates":{"enabled":true}}},"settings":[true,false],"snapshot_sha256":"5540f8aee428612cbd73528cb2935c4b6e9973ae3d55f9894de76b95182c600d"},{"candidate":{"outcome":{"result":{"destination":"Ridge Valley","service":"express","status":"unavailable"},"status":"success"},"reads":{"enable_express_quotes":{"enabled":true},"use_regional_rates":{"enabled":true}}},"original":{"outcome":{"message":"'express'","status":"error","type":"KeyError"},"reads":{"enable_express_quotes":{"enabled":true},"use_regional_rates":{"enabled":true}}},"settings":[true,true],"snapshot_sha256":"0e8cde7b0fdea57ff34b2dadaa6152fcd4638315164954cf6201d2b6fbeb90ee"}],"event_sha256":"1d5b80c34e1f22f7280b00da02023b96c74fd3f6e74058309c4e1ac802703ffb","historical_snapshot":"59aa07ec12bf009a0bea57cda2721c7a23900261808e6e1d6af3bb02383bdbfd","isolation":{"connection_error":"ENETUNREACH","interfaces":["lo"],"isolated":true,"live_listener_reachable":false,"namespace":"net:[4026534239]","probe_host":"127.0.0.1","probe_port":13934},"kind":"effective-flag-combinations","original_app_sha256":"3933c78d4977bb6a4c851baf634e33cc5ab2c613a477d4932d73e3a8b253f0c5","original_version":"buggy"},"fix":"Return an unavailable quote when the requested service is absent from the destination rate table.","headline":"Express quoting failed in Ridge Valley.","id":"shipping-quote","live_requests":{"original":{"app_sha256":"3933c78d4977bb6a4c851baf634e33cc5ab2c613a477d4932d73e3a8b253f0c5","capture_id":"99407c4cb2d981b905d749ea","event_sha256":"1d5b80c34e1f22f7280b00da02023b96c74fd3f6e74058309c4e1ac802703ffb","http_status":500,"method":"POST","occurred_at":"2026-11-25T15:32:36.895+00:00","outcome":{"message":"'express'","status":"error","type":"KeyError"},"path":"/quotes","reads":{"enable_express_quotes":{"enabled":true},"use_regional_rates":{"enabled":true}},"snapshot_sha256":"59aa07ec12bf009a0bea57cda2721c7a23900261808e6e1d6af3bb02383bdbfd"},"retry":{"app_sha256":"3933c78d4977bb6a4c851baf634e33cc5ab2c613a477d4932d73e3a8b253f0c5","capture_id":"b23742e9fec683141f9d477e","event_sha256":"1d5b80c34e1f22f7280b00da02023b96c74fd3f6e74058309c4e1ac802703ffb","http_status":200,"method":"POST","occurred_at":"2026-11-25T15:32:37.192+00:00","outcome":{"result":{"amount_minor":1400,"destination":"Ridge Valley","service":"standard","status":"quoted"},"status":"success"},"path":"/quotes","reads":{"enable_express_quotes":{"enabled":false},"use_regional_rates":{"enabled":true}},"snapshot_sha256":"92b3accb3a47cc8528867139b4a60df2aa56e78a2f413ff5f685874f8edd9b60"}},"occurred_at":"2026-11-25T15:32:36.895+00:00","regression":{"after":{"app_sha256":"79ce1aeaf86a33ce0d489b73abdc488d4e1c2be1665566967048d794b31975ea","app_version":"fixed","capture_id":"99407c4cb2d981b905d749ea","detail":"Historical flags and expected application result match.","event_sha256":"1d5b80c34e1f22f7280b00da02023b96c74fd3f6e74058309c4e1ac802703ffb","expected":{"destination":"Ridge Valley","service":"express","status":"unavailable"},"flags_match":true,"isolation":{"connection_error":"ENETUNREACH","interfaces":["lo"],"isolated":true,"live_listener_reachable":false,"namespace":"net:[4026534239]","probe_host":"127.0.0.1","probe_port":13934},"operation":"shipping-quote","outcome":{"result":{"destination":"Ridge Valley","service":"express","status":"unavailable"},"status":"success"},"passed":true,"pytest_exit":0,"reads":{"enable_express_quotes":{"enabled":true},"use_regional_rates":{"enabled":true}},"snapshot_sha256":"59aa07ec12bf009a0bea57cda2721c7a23900261808e6e1d6af3bb02383bdbfd","spec_sha256":"da5bafa9c7a6781edb3d5139803b521e29a93118e8f5474dfc45466fefc895a1"},"before":{"app_sha256":"3933c78d4977bb6a4c851baf634e33cc5ab2c613a477d4932d73e3a8b253f0c5","app_version":"buggy","capture_id":"99407c4cb2d981b905d749ea","detail":"KeyError: 'express'","event_sha256":"1d5b80c34e1f22f7280b00da02023b96c74fd3f6e74058309c4e1ac802703ffb","expected":{"destination":"Ridge Valley","service":"express","status":"unavailable"},"flags_match":true,"isolation":{"connection_error":"ENETUNREACH","interfaces":["lo"],"isolated":true,"live_listener_reachable":false,"namespace":"net:[4026534239]","probe_host":"127.0.0.1","probe_port":13934},"operation":"shipping-quote","outcome":{"message":"'express'","status":"error","type":"KeyError"},"passed":false,"pytest_exit":1,"reads":{"enable_express_quotes":{"enabled":true},"use_regional_rates":{"enabled":true}},"snapshot_sha256":"59aa07ec12bf009a0bea57cda2721c7a23900261808e6e1d6af3bb02383bdbfd","spec_sha256":"da5bafa9c7a6781edb3d5139803b521e29a93118e8f5474dfc45466fefc895a1"},"binding":"verified","test_sha256":"efde05449f95a1fb5356d5131d878b83f141cc1e625e13a5b18bf8a9fe54111d"},"sdk_checks":[{"identity":"synthetic-mountain-01","label":"Mountain zone segment","parity":"live API and pinned document agree"}],"title":"Shipping quote","transition":{"after":false,"before":true,"flag":"enable_express_quotes","http_status":200,"method":"PATCH","occurred_at":"2026-11-25T15:32:37.096+00:00","segment":"Mountain Zone"}}],"flagsmith_release":"2.295.2","generated_at":"2026-11-25T15:32:39.159+00:00","sample":"synthetic-orders","schema":2,"sdk":"6.5.0","share_summary":{"format":"flight-recorder-summary-v1","incidents":[{"after_passed":true,"before_passed":false,"changed_flags":1,"replay_matched":true},{"after_passed":true,"before_passed":false,"changed_flags":1,"replay_matched":true}]}}
+    </script>
+    <script>
+      "use strict";
+const evidence = JSON.parse(document.getElementById("evidence").textContent);
+const byId = (id) => document.getElementById(id);
+const element = (tag, text) => {
+  const node = document.createElement(tag);
+  if (text !== undefined && text !== null) node.textContent = text;
+  return node;
+};
+const display = (value) =>
+  typeof value === "string" ? value : JSON.stringify(value, null, 2);
+const short = (value) => (value ? String(value).slice(0, 12) : "—");
+const setting = (value) =>
+  typeof value === "boolean" ? (value ? "On" : "Off") : display(value);
+const observation = (read) => {
+  if (!read) return "No read";
+  const parts = [];
+  if (Object.hasOwn(read, "enabled")) parts.push(setting(read.enabled));
+  if (Object.hasOwn(read, "value")) parts.push(setting(read.value));
+  return parts.join(" · ");
+};
+const resultText = (outcome) =>
+  outcome.status === "error"
+    ? outcome.type + ": " + outcome.message
+    : display(outcome.result);
+let incident, stages, selected;
+function fields(list, data) {
+  list.replaceChildren(
+    ...data
+      .filter(([, v]) => v !== undefined && v !== null && v !== "")
+      .map(([k, v]) => {
+        const row = element("div");
+        row.append(element("dt", k), element("dd", v));
+        return row;
+      }),
+  );
+}
+function download(name, blob) {
+  const url = URL.createObjectURL(blob),
+    a = element("a");
+  a.href = url;
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function jsonDownload(name, data) {
+  download(
+    name,
+    new Blob([JSON.stringify(data, null, 2) + "\n"], {
+      type: "application/json",
+    }),
+  );
+}
+function route(key, push) {
+  const hash = "#" + encodeURIComponent(incident.id) + "/" + key;
+  if (push && location.hash !== hash) history.pushState(null, "", hash);
+}
+function stageList() {
+  const c = incident.comparison,
+    live = incident.live_requests,
+    test = incident.regression;
+  const original = c.recorded || c.historical;
+  const underEdit = live ? live.retry : c.current;
+  const out = (run) =>
+    run.outcome.status === "error" ? "App failed" : "Returned result";
+  const check =
+    c.historical.outcome.status === "error"
+      ? "Failure matched"
+      : "Result matched";
+  const list = [
+    {
+      id: "original",
+      title: "Capture",
+      result: original,
+      status: out(original),
+      kind: "Recorded operation",
+      explanation: incident.description,
+      receipt: live?.original,
+      version: c.app_version,
+    },
+    {
+      id: "updated",
+      title: live ? "Live retry" : "Updated rules",
+      result: underEdit,
+      status: out(underEdit),
+      kind: live
+        ? "Live application response"
+        : "Offline rerun with updated rules",
+      explanation: live
+        ? "The same request reached the application after the Flagsmith edit. Its response also matched the independent offline comparison."
+        : "The same code ran against the selected updated document inside the offline worker.",
+      receipt: live?.retry,
+      version: c.app_version,
+    },
+    {
+      id: "replay",
+      title: "Offline replay",
+      result: c.historical,
+      status: check,
+      kind: "Network-isolated replay",
+      explanation:
+        "The captured code, flag reads and result matched under the original rules.",
+      version: c.app_version,
+    },
+  ];
+  if (test) {
+    const verified = test.binding === "verified",
+      fix =
+        verified &&
+        !test.before.passed &&
+        test.after.passed &&
+        test.before.app_sha256 !== test.after.app_sha256;
+    list.push({
+      id: "fix",
+      title: fix ? "Code fix" : "Candidate",
+      result: test.after,
+      status: verified
+        ? test.after.passed
+          ? "Test passed"
+          : "Test failed"
+        : "Legacy result",
+      kind: verified
+        ? "Historical regression verification"
+        : "Archived verification",
+      explanation: verified
+        ? incident.fix || test.after.detail
+        : "This archive predates linked specification receipts. The two reported runs have unverified test identity.",
+      version: test.after.app_version,
+    });
+  }
+  return list;
+}
+function selectStage(index, push = false) {
+  selected = index;
+  const s = stages[index],
+    c = incident.comparison,
+    t = incident.regression;
+  for (const b of document.querySelectorAll("[data-stage]"))
+    b.setAttribute("aria-pressed", String(+b.dataset.stage === index));
+  for (const cell of document.querySelectorAll("[data-col]"))
+    cell.classList.toggle("selected", +cell.dataset.col === index);
+  byId("stage-kind").textContent = s.kind;
+  byId("output-title").textContent = s.status;
+  byId("output").textContent = resultText(s.result.outcome);
+  byId("output").className =
+    s.result.outcome.status === "success" ? "success" : "";
+  byId("explain").textContent = s.explanation;
+  byId("proof-title").textContent = s.title + " evidence";
+  let data = [
+    ["Snapshot", short(s.result.snapshot_sha256)],
+    ["Application", s.version],
+  ];
+  if (s.receipt)
+    data.push(
+      [
+        "HTTP receipt",
+        s.receipt.method + " " + s.receipt.path + " · " + s.receipt.http_status,
+      ],
+      ["Capture ID", s.receipt.capture_id],
+      ["Received", s.receipt.occurred_at],
+    );
+  if (s.id === "updated" && incident.transition)
+    data.push([
+      "Flagsmith edit",
+      incident.transition.segment +
+        " · " +
+        incident.transition.method +
+        " " +
+        incident.transition.http_status,
+    ]);
+  if (s.id === "replay")
+    data.push(
+      ["Network", c.isolation.interfaces.join(", ") + " · loopback only"],
+      ["Live server probe", c.isolation.connection_error],
+      ["Flag reads", "Matched capture"],
+    );
+  if (s.id === "fix")
+    data.push(
+      ["Original code", testVerdict(t.before)],
+      ["Candidate code", testVerdict(t.after)],
+      [
+        "Test identity",
+        t.binding === "verified"
+          ? short(t.after.spec_sha256)
+          : "Unlinked archive",
+      ],
+    );
+  fields(byId("proof"), data);
+  route(s.id, push);
+}
+function testVerdict(run) {
+  const name = Object.hasOwn(run, "pytest_exit")
+    ? "pytest exit " + run.pytest_exit
+    : "Verification";
+  return name + " · " + (run.passed ? "Passed" : "Failed");
+}
+function stageButton(i, mobile) {
+  const s = stages[i],
+    b = element("button");
+  b.type = "button";
+  b.className = mobile ? "m-stage" : "stage";
+  b.dataset.stage = i;
+  b.setAttribute("aria-label", s.title + " · " + s.status);
+  if (mobile) {
+    const label = element("span", s.status);
+    label.className = statusClass(s);
+    b.append(element("strong", s.title), label);
+  } else b.textContent = s.title;
+  b.addEventListener("click", () => selectStage(i, true));
+  b.addEventListener("keydown", (e) => {
+    const n = stages.length,
+      next = {
+        ArrowRight: (i + 1) % n,
+        ArrowLeft: (i + n - 1) % n,
+        Home: 0,
+        End: n - 1,
+      };
+    if (Object.hasOwn(next, e.key)) {
+      e.preventDefault();
+      selectStage(next[e.key], true);
+      b.closest(mobile ? ".m-stages" : "table")
+        .querySelector('[data-stage="' + selected + '"]')
+        .focus();
+    }
+  });
+  return b;
+}
+function statusClass(s) {
+  if (s.id === "replay") return "good";
+  if (s.id === "fix")
+    return incident.regression.binding === "verified"
+      ? incident.regression.after.passed
+        ? "good"
+        : "bad"
+      : "neutral";
+  return s.result.outcome.status === "error" ? "bad" : "good";
+}
+function buildTrace() {
+  const c = incident.comparison,
+    changes = c.flag_changes.map((x) => x.name),
+    keys = [
+      ...new Set([
+        ...changes,
+        ...stages.flatMap((s) => Object.keys(s.result.reads)),
+      ]),
+    ];
+  const head = element("thead"),
+    hr = element("tr"),
+    label = element("th", "Inspect a run");
+  label.scope = "col";
+  hr.append(label);
+  stages.forEach((s, i) => {
+    const th = element("th");
+    th.scope = "col";
+    th.dataset.col = i;
+    th.append(stageButton(i, false));
+    hr.append(th);
+  });
+  head.append(hr);
+  const body = element("tbody");
+  const rows = keys.map((name) => ({
+    name,
+    values: stages.map((s) => observation(s.result.reads[name])),
+  }));
+  rows.push(
+    {
+      name: "Application code",
+      values: stages.map((s) => s.version || "Original"),
+    },
+    { name: "Outcome", values: stages.map((s) => s.status) },
+  );
+  for (const row of rows) {
+    const line = element("tr"),
+      th = element("th", row.name);
+    th.scope = "row";
+    line.append(th);
+    const waveRow =
+      changes.includes(row.name) &&
+      row.values.every((v) => v === "On" || v === "Off");
+    row.values.forEach((v, i) => {
+      const td = element("td", v);
+      td.dataset.col = i;
+      if (row.name === "Outcome")
+        td.className = "status " + statusClass(stages[i]);
+      if (waveRow) {
+        td.className = "level";
+        const wave = element("span");
+        wave.className =
+          "wave" +
+          (v === "Off" ? " low" : "") +
+          (i && row.values[i - 1] !== v ? " transition" : "");
+        wave.setAttribute("aria-hidden", "true");
+        const marker = element("i");
+        marker.className = "sample";
+        wave.append(marker);
+        td.append(wave);
+      }
+      line.append(td);
+    });
+    body.append(line);
+  }
+  byId("matrix").replaceChildren(head, body);
+  byId("m-stages").replaceChildren(
+    ...stages.map((_, i) => stageButton(i, true)),
+  );
+  const lines = keys.map((name) => {
+    const line = element("span");
+    line.className = "held";
+    line.append(
+      element("code", name),
+      document.createTextNode(
+        "  " +
+          observation(c.historical.reads[name]) +
+          (changes.includes(name)
+            ? " → " + observation(c.current.reads[name])
+            : " · held across snapshots"),
+      ),
+    );
+    return line;
+  });
+  byId("delta").replaceChildren(...lines);
+}
+function inspectCell(cell, i) {
+  for (const b of byId("grid").querySelectorAll("button"))
+    b.setAttribute("aria-pressed", String(+b.dataset.index === i));
+  const matrix = incident.exploration;
+  byId("cell-title").textContent =
+    cell.settings
+      .map((v, j) => matrix.axes[j].flag + " " + setting(v))
+      .join(" / ") +
+    (JSON.stringify(cell.settings) === JSON.stringify(matrix.baseline_settings)
+      ? " · Captured settings"
+      : "");
+  const nodes = [];
+  for (const [key, version] of [
+    ["original", matrix.original_version],
+    ["candidate", matrix.candidate_version],
+  ]) {
+    const run = cell[key],
+      details = element("details");
+    details.append(
+      element("summary", "Observed flag reads"),
+      element("pre", display(run.reads)),
+    );
+    nodes.push(
+      element(
+        "h4",
+        version +
+          " · " +
+          (run.outcome.status === "error" ? "Raised an error" : "Returned"),
+      ),
+      element("pre", resultText(run.outcome)),
+      details,
+    );
+  }
+  byId("cell-output").replaceChildren(...nodes);
+}
+function buildGrid() {
+  const m = incident.exploration;
+  byId("explorer").hidden = !m;
+  byId("jump").hidden = !m;
+  if (!m) return;
+  const [a, b] = m.axes,
+    table = element("table");
+  table.className = "axes";
+  table.append(
+    element("caption", "Rows · " + a.flag + " / Columns · " + b.flag),
+  );
+  const headers = element("tr");
+  headers.append(element("th", ""));
+  b.values.forEach((v) => {
+    const th = element("th", setting(v));
+    th.scope = "col";
+    headers.append(th);
+  });
+  const thead = element("thead");
+  thead.append(headers);
+  table.append(thead);
+  const tbody = element("tbody");
+  a.values.forEach((x) => {
+    const tr = element("tr"),
+      th = element("th", setting(x));
+    th.scope = "row";
+    tr.append(th);
+    b.values.forEach((y) => {
+      const i = m.cells.findIndex(
+          (cell) => JSON.stringify(cell.settings) === JSON.stringify([x, y]),
+        ),
+        cell = m.cells[i];
+      const failure = cell.original.outcome.status === "error",
+        td = element("td"),
+        btn = element("button", failure ? "App failed" : "Returned");
+      btn.type = "button";
+      btn.className = failure ? "failure" : "";
+      btn.dataset.index = i;
+      btn.setAttribute(
+        "aria-label",
+        a.flag +
+          " " +
+          setting(x) +
+          ", " +
+          b.flag +
+          " " +
+          setting(y) +
+          ", " +
+          btn.textContent,
+      );
+      btn.onclick = () => inspectCell(cell, i);
+      td.append(btn);
+      tr.append(td);
+    });
+    tbody.append(tr);
+  });
+  table.append(tbody);
+  byId("grid").replaceChildren(
+    table,
+    element(
+      "p",
+      "Cells show the original code. Select one to compare the candidate. These runs use hypothetical effective values.",
+    ),
+  );
+  byId("grid").lastChild.className = "lab-note";
+  const index = Math.max(
+    0,
+    m.cells.findIndex((cell) => cell.original.outcome.status === "error"),
+  );
+  inspectCell(m.cells[index], index);
+}
+function buildDetails() {
+  const c = incident.comparison,
+    t = incident.regression,
+    a = incident.artifacts;
+  const checks = (incident.sdk_checks || []).map((x) => [
+    x.label,
+    x.parity + (x.variant ? " · " + x.variant : ""),
+  ]);
+  fields(byId("origins"), [
+    ["Capture ID", c.capture_id],
+    ["Captured", incident.occurred_at || c.occurred_at],
+    ["Identity", c.identity],
+    ["Traits", c.traits && display(c.traits)],
+    ["Input SHA-256", c.event_sha256],
+    ["Captured code", c.app_sha256],
+    ["Original snapshot", c.historical.snapshot_sha256],
+    ["Updated snapshot", c.current.snapshot_sha256],
+    ["Runtime", c.runtime && display(c.runtime)],
+    ...Object.entries(c.reasons || {}).map(([k, v]) => [
+      "SDK reason · " + k,
+      v,
+    ]),
+    ...checks,
+  ]);
+  byId("regression").hidden = !t;
+  if (t) {
+    const list = element("dl");
+    list.className = "signal";
+    fields(list, [
+      ["Original verdict", testVerdict(t.before)],
+      ["Candidate verdict", testVerdict(t.after)],
+      ["Original code SHA-256", t.before.app_sha256],
+      ["Candidate code SHA-256", t.after.app_sha256],
+      ["Specification SHA-256", t.after.spec_sha256],
+      ["Test file SHA-256", t.test_sha256],
+      [
+        "Observed flags",
+        t.after.flags_match ? "Match the historical reads" : t.after.detail,
+      ],
+    ]);
+    const nodes = [
+      list,
+      element("p", "Expected application result"),
+      element("pre", display(t.after.expected)),
+    ];
+    if (a) {
+      const button = element("button", "Download runnable synthetic pytest");
+      button.type = "button";
+      button.onclick = () =>
+        download(
+          a.filename,
+          new Blob(
+            [Uint8Array.from(atob(a.zip_base64), (v) => v.charCodeAt(0))],
+            { type: "application/zip" },
+          ),
+        );
+      nodes.push(
+        element("h3", "Application change"),
+        element("pre", a.patch),
+        element(
+          "p",
+          "The downloadable fixture contains synthetic effective values and its own snapshot. Use CPython " +
+            a.runtime.python +
+            " on Linux. The archive includes the exact test commands.",
+        ),
+        button,
+      );
+    }
+    byId("regression-body").replaceChildren(...nodes);
+  }
+  const importable = /^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*$/.test(
+    c.registry || "",
+  );
+  byId("replay-command").hidden = !(
+    importable && /^[a-f0-9]{24}$/.test(c.capture_id)
+  );
+  if (!byId("replay-command").hidden)
+    byId("command").textContent =
+      "flight-recorder replay " + c.capture_id + " --registry " + c.registry;
+}
+function render(inc, key, push = false) {
+  incident = inc;
+  stages = stageList();
+  byId("case").value = inc.id;
+  byId("case-id").textContent = "Capture " + short(inc.comparison.capture_id);
+  document.title = inc.title + " · Flag Flight Recorder";
+  byId("headline").textContent = inc.headline || inc.title;
+  byId("dek").textContent = inc.description;
+  buildTrace();
+  buildGrid();
+  buildDetails();
+  byId("provenance").open = key === "capture";
+  byId("regression").open = key === "regression";
+  const mapped =
+    { overview: "replay", regression: "fix", capture: "replay" }[key] || key;
+  const index = stages.findIndex((s) => s.id === mapped);
+  selectStage(index < 0 ? 2 : index, false);
+  route(key || "replay", push);
+  if (key === "combinations" && inc.exploration) byId("explorer").focus();
+  byId("meta").textContent = [
+    evidence.flagsmith_release && "Flagsmith " + evidence.flagsmith_release,
+    evidence.sample === "synthetic-orders"
+      ? "Synthetic order examples"
+      : "Recorded evidence",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+function loadRoute() {
+  if (location.hash === "#investigation" && incident) return;
+  let id, key;
+  try {
+    [id, key] = location.hash.slice(1).split("/");
+    id = decodeURIComponent(id);
+  } catch {
+    id = "";
+  }
+  render(
+    evidence.cases.find((c) => c.id === id) || evidence.cases[0],
+    key || "replay",
+  );
+}
+for (const item of evidence.cases) {
+  const opt = element("option", item.title);
+  opt.value = item.id;
+  byId("case").append(opt);
+}
+byId("case").onchange = (e) =>
+  render(
+    evidence.cases.find((c) => c.id === e.target.value),
+    "replay",
+    true,
+  );
+byId("jump").onclick = () => {
+  route("combinations", true);
+  byId("explorer").focus();
+  byId("explorer").scrollIntoView({ block: "start" });
+};
+byId("save").onclick = () =>
+  jsonDownload("flight-recorder-evidence.json", evidence);
+byId("summary").onclick = () =>
+  jsonDownload("flight-recorder-summary.json", evidence.share_summary);
+byId("copy").onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(byId("command").textContent);
+    byId("copy").textContent = "Copied";
+    setTimeout(() => (byId("copy").textContent = "Copy command"), 1200);
+  } catch {
+    const range = document.createRange();
+    range.selectNodeContents(byId("command"));
+    const selection = getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+};
+document.querySelector(".skip").onclick = (e) => {
+  e.preventDefault();
+  byId("investigation").focus();
+};
+window.addEventListener("hashchange", loadRoute);
+loadRoute();
+
+    </script>
+  </body>
+</html>

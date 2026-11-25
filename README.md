@@ -1,79 +1,78 @@
 # Flag Flight Recorder
 
-Reproduce a flag-dependent Python failure after the live configuration changes. Flag Flight Recorder binds the rules actually used by an operation to its inputs, then uses the official Flagsmith Python SDK to run that operation again with networking disabled.
+A customer’s CSV export failed. By the time a developer investigated, someone had changed a feature flag and the same request worked again. Flag Flight Recorder captures the original Flagsmith rules with the request, reproduces the failure offline, and turns it into a pytest that can verify the fix.
 
-The demo uses a real self-hosted Flagsmith instance. A pilot CSV export fails, a live targeting rule changes, and the export starts working. Historical replay brings back the original exception. One generated pytest test then fails on the buggy exporter and passes on the fixed version under the original settings. A separate shipping quote handler exercises the same Python integration.
+**[Open the interactive incident](https://raj9073.github.io/flag-flight-recorder/)** · [Download the offline viewer](https://github.com/raj9073/flag-flight-recorder/releases/download/v0.2.0/flag-flight-recorder-evidence.html) · [Release and Python package](https://github.com/raj9073/flag-flight-recorder/releases/tag/v0.2.0) · [Automated checks](https://github.com/raj9073/flag-flight-recorder/actions/workflows/verify.yml)
 
-[Watch the working demo](https://github.com/raj9073/flag-flight-recorder/releases/download/v0.1.0/flag-flight-recorder-demo.mp4) or [download the interactive evidence report](https://github.com/raj9073/flag-flight-recorder/releases/download/v0.1.0/flag-flight-recorder-evidence.html) and open it in a browser.
+[![Execution trace of a pilot export, showing streaming on, off, and restored, with a failing capture and a passing code fix](docs/preview.png)](https://raj9073.github.io/flag-flight-recorder/)
 
-![Evidence report comparing the original CSV failure, successful live retry, and offline reproduction](docs/preview.png)
+## Inspect an incident
 
-## Run the demo
+| Select a stage | What happened in the CSV example |
+| --- | --- |
+| Capture | A pilot requested a summary export. Streaming was on, the CSV writer raised a `ValueError`, and the application returned HTTP 500. |
+| Live retry | A real Flagsmith targeting edit switched streaming off. The same customer sent the same request to the running application and received HTTP 200 with both orders. |
+| Offline replay | The official Python SDK evaluated the original rules with networking disabled. The original code raised the same exception and read the same flags. |
+| Code fix | The same pytest failed on the original code and passed on the fixed exporter with streaming still on. |
 
-Use Linux with unprivileged user and network namespaces, Python 3.11–3.14, [uv](https://docs.astral.sh/uv/), and Docker or Podman with Compose. The report also opens as a standalone HTML file after generation.
+Open **Try flag combinations** to inspect eight offline executions. For these two orders, only streaming **on** with the **summary** profile breaks the original exporter. Each cell shows both versions’ actual outputs and flag reads. Switch incidents to examine a shipping quote backed by a regional rate-table fixture. The browser displays the recorded executions. The commands below generate fresh ones. [CSV combinations](https://raj9073.github.io/flag-flight-recorder/#csv-export/combinations) · [Shipping quote](https://raj9073.github.io/flag-flight-recorder/#shipping-quote/replay)
+
+## Run with self-hosted Flagsmith
+
+From a clone, use Linux, Python 3.11–3.14, uv, and Docker or Podman with Compose. Replay requires permission to create user and network namespaces. The hosted viewer and standalone HTML open in a browser on any platform.
 
 ```sh
 uv sync --locked
+uv run --locked flight-recorder doctor --live
 uv run --locked python -m examples.stack start
 uv run --locked python -m examples.demo
 uv run --locked flight-recorder serve .local/demo/evidence.html
 ```
 
-Open [the evidence viewer](http://127.0.0.1:13811). Switch between CSV export and shipping quote, then open **Regression test** to see the before-and-after results. **Capture details** shows the snapshot and input digests and the live SDK parity checks. **Download evidence** saves the structured report.
+Open the local viewer at port 13811. The demo creates synthetic records in its own Flagsmith project, exercises `POST /exports` and `POST /quotes`, changes targeting through the management API, runs pytest twice for each fix, and prints the private capture directory. Flagsmith runs on port 13810. Its generated local sign-in stays in `.local/lab/admin.json`. [Local viewer](http://127.0.0.1:13811/) · [Local Flagsmith](http://127.0.0.1:13810/) · [Recording walkthrough](docs/recording.md)
 
-The stack publishes [Flagsmith](http://127.0.0.1:13810) on loopback. The demo generates its local sign-in in `.local/lab/admin.json` and sets up a dedicated synthetic project. Each run restores its starting overrides, performs both live edits, and prints the location of the private captures and exported tests. The synthetic overrides are disabled at the end.
+Stop the services with `uv run --locked python -m examples.stack stop`. The database persists across restarts. Use matching `--port` and `--state` arguments on the stack and demo commands to choose a separate lab. Set `FFR_CONTAINER_ENGINE=docker` or `podman` to choose an installed engine.
 
-Use `uv run --locked python -m examples.stack stop` to stop the services while retaining the database. When a port is in use, supply the same explicit `--port` and a new `--state` directory to both stack and demo commands.
+## Try it in your own Python project
 
-## Explore a capture
-
-From the private run directory printed by the demo, choose a capture ID and current snapshot digest from the evidence report. Set `FLIGHT_RECORDER_STORE` to that run's `store` directory. The examples are registered by `examples.registry:build_registry`.
+This example works in an empty directory. It installs the release, copies a small label handler into your project, and exercises the complete integration with a synthetic flag. It needs no Flagsmith account. Use a fresh directory so the new package and test have their own paths.
 
 ```sh
-uv run --locked flight-recorder replay CAPTURE_ID --registry examples.registry:build_registry
-uv run --locked flight-recorder compare CAPTURE_ID --current CURRENT_SNAPSHOT_SHA \
-  --registry examples.registry:build_registry --output .local/comparison.json
-uv run --locked flight-recorder export-pytest CAPTURE_ID \
-  --registry examples.registry:build_registry \
-  --expect examples/csv_export/expected.csv --output .local/my-regression
-uv run --locked pytest .local/my-regression/test_incident.py
+uv venv --python 3.13
+. .venv/bin/activate
+uv pip install pytest https://github.com/raj9073/flag-flight-recorder/releases/download/v0.2.0/flag_flight_recorder-0.2.0-py3-none-any.whl
+python -c 'from pathlib import Path; import shutil, examples.starter; shutil.copytree(Path(examples.starter.__file__).parent, "myapp", ignore=shutil.ignore_patterns("__pycache__"))'
+capture_id=$(python -m myapp.run)
+flight-recorder list --operation render-label
+flight-recorder replay "$capture_id" --registry myapp.registry:build_registry
+printf '"priority"\n' > expected.json
+flight-recorder export-pytest "$capture_id" --registry myapp.registry:build_registry \
+  --expect expected.json --output regression
+python -m pytest -q regression/test_incident.py
 ```
 
-The exported suite includes a snapshot, manifest, expected result and declared fixtures. Its default app version is `current`. For the demo registry, set `FLIGHT_RECORDER_APP_VERSION=buggy` or `fixed` to run the same generated test against either implementation. The expectation is supplied at export time and represents the intended application result.
+`myapp/registry.py` exposes the handler and registry to the offline worker. `myapp/run.py` owns startup and prints the capture ID. To capture against your own self-hosted instance, create and enable the boolean flag `priority_label`, set `FLAGSMITH_URL` and `FLAGSMITH_SERVER_KEY` in the application environment, then run `python -m myapp.run --live`. A key is required only to fetch a live document. [Handler and registration](examples/starter/registry.py) · [Application startup](examples/starter/run.py)
 
-Use `flight-recorder snapshot --url URL` with `FLAGSMITH_SERVER_KEY` set to a self-hosted server-side SDK key, or pass `--file` with an exported environment document. For scripted captures, run `flight-recorder capture OPERATION --event EVENT.json --snapshot SNAPSHOT_SHA --registry MODULE:FACTORY`. See `flight-recorder --help` for all arguments. Use `flight-recorder report` to render a comparison JSON file and optionally attach original and fixed regression results from `flight-recorder verify`.
+For your real endpoint, wrap a synchronous operation with `Recorder.run()` to return the handler’s result or re-raise its exception. Use `Recorder(store, registry, errors_only=True)` to save failures on that path. Explicit `record()` calls always save a capture. Declare helper source files in `Registry.register(..., sources=...)`. Supply clock readings, sampled randomness and external responses as JSON inputs or fixtures so that they can be reproduced. [HTTP integration](examples/order_service.py) · [Design and boundaries](docs/architecture.md)
 
-## Add an operation
+## Work with a private capture
 
-Register a synchronous Python handler and supply JSON-compatible inputs and any external data as explicit fixtures. For replay from the CLI, expose the registry through an importable factory.
+Set `FLIGHT_RECORDER_STORE` to the run’s printed `store` directory. Use `flight-recorder list` to find a capture. The viewer includes a replay command for the selected incident. A comparison needs the digest of the updated snapshot, which is listed under **Inspect source fingerprints and SDK checks**.
 
-```python
-import os
-from pathlib import Path
-
-from flag_flight_recorder import Event, OperationContext, Recorder, Registry, Store
-
-
-def render_label(context: OperationContext) -> str:
-    return "priority" if context.flags.enabled("priority_label") else "standard"
-
-
-def build_registry() -> Registry:
-    registry = Registry()
-    registry.register("render-label", handler=render_label)
-    return registry
-
-
-recorder = Recorder(Store(Path(".local/recorder")), build_registry())
-recorder.snapshots.refresh(os.environ["FLAGSMITH_URL"], os.environ["FLAGSMITH_SERVER_KEY"])
-result = recorder.run("render-label", Event("customer-1", {"tier": "pilot"}, {}, {}))
+```sh
+flight-recorder compare "$capture_id" --registry examples.registry:build_registry \
+  --current "$updated_snapshot" --output comparison.json
+flight-recorder explore "$capture_id" --registry examples.registry:build_registry \
+  --axes examples/csv_export/axes.json --candidate-version fixed --output combinations.json
+flight-recorder report comparison.json --exploration combinations.json --output incident.html
+flight-recorder share comparison.json --output anonymous-summary.json
 ```
 
-For this integration, create the boolean flag `priority_label` and set `FLAGSMITH_URL` to your self-hosted instance. The recorder pins an immutable environment document before calling the handler. Historical replay validates the application and evaluator fingerprints and checks that the outcome and evaluated flag reads match the capture. A comparison runs the same code and input under two snapshots. Regression verification intentionally selects the buggy or fixed application version and checks the expected output under the original snapshot.
+`report` also accepts `--before` and `--after` receipts from `flight-recorder verify`. They must agree on the capture, input, original snapshot and complete test specification. Verification checks that the chosen version reads the original flags and returns the expected result. If a refactor skips a previously read flag, strict verification fails and explains the difference.
 
-Keep clocks, randomness and service responses in declared inputs when a handler depends on them. Register supporting application files with the optional `sources` argument to include them in the code fingerprint. Keep raw captures and server-side keys in local storage. The example data and public evidence are synthetic. [Design and verification](docs/architecture.md)
+Full reports and private test exports can contain identities, traits, outputs or sensitive rule documents. **Download anonymous summary** exports only counts and verdicts. The two downloadable tests in the public viewer use separate, synthetic snapshots. Their archive instructions specify the exact Python version used to record them.
 
-## Verify from source
+## Verify the build
 
 ```sh
 uv run --locked ruff check src examples tests
@@ -81,13 +80,9 @@ uv run --locked ruff format --check src examples tests
 uv run --locked mypy
 uv run --locked pytest -q
 uv build --no-sources
+uv run --locked --group browser python tests/browser_check.py --report .local/demo/evidence.html
 ```
 
-The separate browser check uses Chrome and the running viewer. It verifies desktop and mobile layouts, navigation, keyboard tabs, evidence download, the offline HTML file and browser errors.
+The browser check uses the running viewer and Chrome. Use `--channel chromium` for Playwright’s installed Chromium. Continuous integration also builds the wheel, checks it outside the source checkout, and exercises the two HTTP examples with self-hosted Flagsmith. [Workflow](.github/workflows/verify.yml)
 
-```sh
-uv run --locked --group browser python tests/browser_check.py \
-  --report .local/demo/evidence.html
-```
-
-Built for [Toggle Wars Track 03](https://www.wemakedevs.org/hackathons/flagsmith#tracks). The native offline evaluation uses the [Flagsmith server-side SDK](https://docs.flagsmith.com/integrating-with-flagsmith/sdks/server-side#offline-mode).
+Built for Toggle Wars Track 03, **Build on Open Source Flagsmith**. Released under the MIT License. [Track description](https://www.wemakedevs.org/hackathons/flagsmith#tracks) · [Flagsmith SDK](https://docs.flagsmith.com/integrating-with-flagsmith/sdks/server-side) · [License](LICENSE)

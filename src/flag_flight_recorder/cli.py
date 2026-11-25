@@ -8,11 +8,12 @@ import os
 import sys
 from pathlib import Path
 
+from .diagnostics import preflight
 from .integration import Recorder
 from .model import JSON, Event, FlightError, Object, object_value, read_json
 from .regression import export_pytest, load_expected, run_regression
 from .replay import isolated, load_registry
-from .report import render_report, serve_report
+from .report import render_report, report_data, serve_report, sharing_summary
 from .snapshot import Snapshot, fetch_document
 from .store import Store, read_file, write_private
 
@@ -30,6 +31,16 @@ def parser() -> argparse.ArgumentParser:
     )
     subs = root.add_subparsers(dest="command", required=True)
 
+    listing = subs.add_parser("list", help="list recent captures without exposing their inputs")
+    listing.add_argument("--operation")
+    listing.add_argument("--limit", type=int, default=20)
+    doctor = subs.add_parser("doctor", help="check replay and optional live demo prerequisites")
+    doctor.add_argument("--live", action="store_true")
+    doctor.add_argument("--port", type=int, default=13810)
+    doctor.add_argument("--viewer-port", type=int, default=13811)
+    share = subs.add_parser("share", help="export an anonymous summary of validated evidence")
+    share.add_argument("evidence", type=Path)
+    share.add_argument("--output", type=Path, required=True)
     snapshot = subs.add_parser("snapshot", help="store an environment document from Flagsmith")
     source = snapshot.add_mutually_exclusive_group(required=True)
     source.add_argument("--url", help="self-hosted Flagsmith base URL")
@@ -42,7 +53,7 @@ def parser() -> argparse.ArgumentParser:
     capture.add_argument("--registry", required=True, metavar="MODULE:FACTORY")
     capture.add_argument("--app-version", default="current")
 
-    for command in ("replay", "compare"):
+    for command in ("replay", "compare", "explore"):
         replay = subs.add_parser(command, help=f"{command} a capture in a network-isolated worker")
         replay.add_argument("capture")
         replay.add_argument("--registry", required=True, metavar="MODULE:FACTORY")
@@ -50,6 +61,14 @@ def parser() -> argparse.ArgumentParser:
             "--probe", help="optional live loopback HTTP(S) listener for isolation evidence"
         )
         replay.add_argument("--output", type=Path)
+        if command == "explore":
+            replay.add_argument(
+                "--axes",
+                type=Path,
+                required=True,
+                help="two effective flags and two values per flag",
+            )
+            replay.add_argument("--candidate-version", required=True)
         if command == "compare":
             replay.add_argument("--current", required=True, help="current snapshot digest")
 
@@ -74,6 +93,9 @@ def parser() -> argparse.ArgumentParser:
     report.add_argument("evidence", type=Path)
     report.add_argument("--before", type=Path, help="optional original regression result")
     report.add_argument("--after", type=Path, help="optional fixed regression result")
+    report.add_argument(
+        "--exploration", type=Path, help="optional four-combination result for this capture"
+    )
     report.add_argument("--output", type=Path, required=True)
 
     serve = subs.add_parser("serve", help="open the generated evidence viewer on loopback")
@@ -93,7 +115,18 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     store = Store(args.store)
     try:
-        if args.command == "snapshot":
+        if args.command == "list":
+            emit(list(store.list_captures(args.operation, args.limit)))
+        elif args.command == "doctor":
+            if any(not 1024 <= v <= 65535 for v in (args.port, args.viewer_port)):
+                raise FlightError("Use ports between 1024 and 65535.")
+            outcome = preflight(args.live, args.port, args.viewer_port)
+            emit(outcome)
+            return 0 if outcome["ready"] else 2
+        elif args.command == "share":
+            data = report_data(read_json(read_file(args.evidence, "evidence"), "Evidence"))
+            emit(sharing_summary(data), args.output)
+        elif args.command == "snapshot":
             if args.file:
                 raw = read_file(args.file, "environment document")
             else:
@@ -118,11 +151,18 @@ def main(argv: list[str] | None = None) -> int:
                     "outcome": capture.outcome,
                 }
             )
-        elif args.command in ("replay", "compare"):
+        elif args.command in ("replay", "compare", "explore"):
+            options: Object = {}
+            if args.command == "explore":
+                options = {
+                    "axes": read_json(read_file(args.axes, "axes"), "Flag axes"),
+                    "candidate": args.candidate_version,
+                }
             emit(
                 isolated(
                     args.command,
                     {
+                        **options,
                         "registry": args.registry,
                         "store": str(store.root),
                         "capture": args.capture,
@@ -158,7 +198,15 @@ def main(argv: list[str] | None = None) -> int:
             content = read_json(
                 read_file(args.evidence, "execution evidence"), "Execution evidence"
             )
-            write_private(args.output, render_report(content, checks), replace=True)
+            matrix = (
+                object_value(
+                    read_json(read_file(args.exploration, "exploration"), "Exploration"),
+                    "Exploration",
+                )
+                if args.exploration
+                else None
+            )
+            write_private(args.output, render_report(content, checks, matrix), replace=True)
             emit({"report": str(args.output.resolve())})
         elif args.command == "serve":
             serve_report(args.report, args.port)

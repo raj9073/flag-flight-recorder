@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from threading import Lock
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlsplit
+from uuid import UUID
 
 from flagsmith import Flagsmith
 from flagsmith.models import Flags
@@ -96,8 +97,56 @@ class RecordingFlags:
         self._reads.setdefault(name, {})["value"] = value
         return value
 
+    def reasons(self, reads: Object) -> Object:
+        """Reasons supplied by the official evaluator for the flags this operation used."""
+        return {
+            name: str(reason)
+            for name in reads
+            if (reason := getattr(self._flags.get_flag(name), "reason", None))
+        }
+
+    def resolved(self) -> dict[str, Object]:
+        return {
+            flag.feature_name: {"enabled": flag.enabled, "value": flag.value}
+            for flag in self._flags.all_flags()
+        }
+
     def observations(self) -> Object:
         return {name: dict(read) for name, read in self._reads.items()}
+
+
+def effective_snapshot(flags: dict[str, Object]) -> Snapshot:
+    """A synthetic Flagsmith document for an already-resolved set of effective values."""
+    states: list[JSON] = []
+    for index, (name, values) in enumerate(sorted(flags.items()), 1):
+        states.append(
+            {
+                "feature": {"id": index, "name": name, "type": "STANDARD"},
+                "enabled": values["enabled"],
+                "feature_state_value": values["value"],
+                "django_id": index,
+                "featurestate_uuid": str(UUID(int=index)),
+                "feature_segment": None,
+                "multivariate_feature_state_values": [],
+            }
+        )
+    return Snapshot(
+        canonical(
+            {
+                "id": 1,
+                "name": "Effective flags fixture",
+                "api_key": "offline-synthetic-fixture",
+                "project": {
+                    "id": 1,
+                    "name": "Local fixture",
+                    "organisation": {"id": 1, "name": "Local"},
+                    "segments": [],
+                },
+                "feature_states": states,
+                "identity_overrides": [],
+            }
+        )
+    )
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
