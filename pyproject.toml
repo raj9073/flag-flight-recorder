@@ -12,6 +12,10 @@ license-files = ["LICENSE"]
 requires-python = ">=3.11,<3.15"
 dependencies = ["flagsmith==6.5.0", "flagsmith-flag-engine==11.1.2"]
 
+[project.urls]
+Repository = "https://github.com/raj9073/flag-flight-recorder"
+"Incident viewer" = "https://raj9073.github.io/flag-flight-recorder/"
+
 [project.scripts]
 flight-recorder = "flag_flight_recorder.cli:main"
 
@@ -23,7 +27,7 @@ browser = ["playwright>=1.55,<2"]
 packages = ["src/flag_flight_recorder", "examples"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/src", "/examples", "/tests", "/docs", "/compose.yaml", "/README.md", "/LICENSE", "/pyproject.toml", "/uv.lock"]
+include = ["/.github/workflows/verify.yml", "/src", "/examples", "/tests", "/docs", "/compose.yaml", "/README.md", "/LICENSE", "/pyproject.toml", "/uv.lock"]
 
 [tool.ruff]
 line-length = 100
