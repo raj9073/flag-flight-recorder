@@ -4,6 +4,8 @@ Reproduce a flag-dependent Python failure after the live configuration changes. 
 
 The demo uses a real self-hosted Flagsmith instance. A pilot CSV export fails, a live targeting rule changes, and the export starts working. Historical replay brings back the original exception. One generated pytest test then fails on the buggy exporter and passes on the fixed version under the original settings. A separate shipping quote handler exercises the same Python integration.
 
+[Watch the working demo](https://github.com/raj9073/flag-flight-recorder/releases/download/v0.1.0/flag-flight-recorder-demo.mp4) or [download the interactive evidence report](https://github.com/raj9073/flag-flight-recorder/releases/download/v0.1.0/flag-flight-recorder-evidence.html) and open it in a browser.
+
 ![Evidence report comparing the original CSV failure, successful live retry, and offline reproduction](docs/preview.png)
 
 ## Run the demo
